@@ -8,3 +8,6 @@ src/**
 .gitignore
 tsconfig.json
 vsc-extension-quickstart.md
+package-lock.json
+.yarnclean
+yarn.lock
