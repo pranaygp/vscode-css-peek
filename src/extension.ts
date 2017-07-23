@@ -1,7 +1,6 @@
 import * as vscode from 'vscode'
 
 import * as fs   from 'fs'
-import * as _    from 'lodash'
 import {detect}  from 'async'
 import * as css from 'css'
 import * as less from 'less'
@@ -90,7 +89,7 @@ export class PeekCSSDefinitionProvider implements vscode.DefinitionProvider {
    * @return {CompiledCSS} Object containing `css` prop as compiled CSS and `map` prop and sourcemap 
    */
   static async compileCSS(file: string, file_text: string): Promise<CompiledCSS> {
-    switch (_.last(file.split('.'))) {
+    switch ([...(file.split('.'))].pop()) {
       case 'less':
         try {
           const parsed_less: Less.RenderOutput = await less.render(file_text, { filename: file, sourceMap: {} })
@@ -123,7 +122,7 @@ export class PeekCSSDefinitionProvider implements vscode.DefinitionProvider {
     if (!parsed_css.stylesheet.rules) throw new Error('no CSS rules')
 
     const rule: css.Rule = parsed_css.stylesheet.rules.filter((node: css.Node) => node.type === 'rule').find((rule: css.Rule) => {
-      return (_.includes(rule.selectors, selector, 0))
+      return (rule.selectors.includes(selector))
     }) as css.Rule
 
     if (!rule) throw new Error('CSS rule not found in ' + file)
@@ -142,7 +141,7 @@ export class PeekCSSDefinitionProvider implements vscode.DefinitionProvider {
   async findRuleAndMap(selector: {attribute: string, value: string}): Promise<RuleAndMap> {
 
     const file_searches: any = await Promise.all(this.fileSearchExtensions.map(type => vscode.workspace.findFiles(`**/*${type}`, '')))
-    let potential_fnames: string[] = _.flatten(file_searches).map(uri => (uri as any).fsPath)
+    let potential_fnames: string[] = Array.prototype.concat(...file_searches).map(uri => (uri as any).fsPath)
 
     this.exclude
       .map(expression => new RegExp(expression, 'gi'))

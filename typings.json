@@ -3,7 +3,6 @@
     "async": "registry:dt/async#2.0.1+20161110083428",
     "css": "registry:dt/css#0.0.0+20151120051005",
     "less": "registry:dt/less#0.0.0+20161208204558",
-    "lodash": "registry:dt/lodash#4.14.0+20161110215204",
     "source-map": "registry:dt/source-map#0.0.0+20161003134342"
   }
 }
