@@ -28,7 +28,7 @@ let activeLanguages: string[];
 // A list of file extensions to lookup for style definitions (defaults to .css, .scss and .less)
 let fileSearchExtensions: string[]
 
-documents.onDidOpen((event) => {
+let onFileOpen = (event) => {
   connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Document opened: ${event.document.uri}`);
   if (fileSearchExtensions.indexOf('.' + event.document.languageId) > -1) {
     const uri = event.document.uri;
@@ -42,24 +42,12 @@ documents.onDidOpen((event) => {
       stylesheet
     }
   }
-})
+}
+
+documents.onDidOpen(onFileOpen)
 documents.listen(connection);
 
-documents.onDidChangeContent((event) => {
-  connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Document changed: ${event.document.uri}`);
-  if (fileSearchExtensions.indexOf('.' + event.document.languageId) > -1) {
-    const uri = event.document.uri;
-    const languageId = event.document.languageId;
-    const text = event.document.getText();
-    const document = TextDocument.create(uri, languageId, 1, text);
-    const languageService = getLanguageService(document);
-    const stylesheet = languageService.parseStylesheet(document);
-    styleSheets[event.document.uri] = {
-      document,
-      stylesheet
-    };
-  }
-})
+documents.onDidChangeContent(onFileOpen)
 
 connection.onInitialize((params) => {
   create(connection.console);
@@ -105,12 +93,12 @@ connection.onDefinition((textDocumentPositon: TextDocumentPositionParams): Defin
   const document = documents.get(documentIdentifier.uri);
 
   // Ignore defintiion requests from unsupported languages
-  if(activeLanguages.indexOf(document.languageId) === -1){
+  if (!activeLanguages.includes(document.languageId)) {
     return null;
   }
 
   const selector: Selector = findSelector(document, position);
-	if(!selector) {
+	if (!selector) {
 		return null;
   }
 

@@ -22,11 +22,15 @@ export default function findSelector(document: TextDocument, position: Position)
   let start = offset;
   let end = offset;
 
-  while (start > 0 && text.charAt(start - 1) !== ' ' && text.charAt(start - 1) !== '\'' && text.charAt(start - 1) !== '"' && text.charAt(start - 1) !== '\n' && text.charAt(start - 1) !== '<')
-    start -= 1
+  let delimeters = [' ', '\'', '"', '\n', '<']
 
-  while (end < text.length && text.charAt(end) !== ' ' && text.charAt(end) !== '\'' && text.charAt(end) !== '"' && text.charAt(end) !== '\n' && text.charAt(end) !== '>')
+  while (start > 0 && !delimeters.includes(text.charAt(start - 1))) {
+    start -= 1
+  }
+  
+  while (end < text.length && !delimeters.includes(text.charAt(end))) {
     end += 1
+  }
 
   const selectorWord = text.slice(start, end);
 
@@ -47,8 +51,8 @@ export default function findSelector(document: TextDocument, position: Position)
         break;
       case TokenType.AttributeValue:
         if (attribute === 'class' || attribute === 'id') {
-          if (htmlScanner.getTokenText().slice(1, -1).split(' ').indexOf(selectorWord) > -1){
-            selector = { attribute, value: selectorWord}
+          if (htmlScanner.getTokenText().slice(1, -1).split(' ').indexOf(selectorWord) > -1) {
+            selector = { attribute, value: selectorWord }
           }
         }
         break;
@@ -56,12 +60,11 @@ export default function findSelector(document: TextDocument, position: Position)
     tokenType = htmlScanner.scan();
   }
 
-  if(selector){
+  if (selector) {
     console.log("Found CSS selector of type " + selector.attribute + " and value " + selector.value);
   } else {
     console.log("Invalid Selector...");
   }
 
   return selector;
-
 }
