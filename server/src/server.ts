@@ -105,12 +105,15 @@ connection.onDefinition((textDocumentPositon: TextDocumentPositionParams): Defin
   const document = documents.get(documentIdentifier.uri);
 
   // Ignore defintiion requests from unsupported languages
-  if(activeLanguages.indexOf(document.languageId) === -1){
+  if (activeLanguages.indexOf(document.languageId) === -1) {
+    return null;
+  }
+  if (!activeLanguages.includes(document.languageId)) {
     return null;
   }
 
   const selector: Selector = findSelector(document, position);
-	if(!selector) {
+	if (!selector) {
 		return null;
   }
 

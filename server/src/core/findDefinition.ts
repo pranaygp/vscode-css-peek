@@ -13,7 +13,7 @@ let languageServices: { [id: string]: LanguageService } = {
 export function getLanguageService(document: TextDocument) {
 	let service = languageServices[document.languageId];
 	if (!service) {
-		console.log('Document type is ' + document.languageId + ', using css instead.');
+    console.log(`Document type is ${document.languageId}, using css instead.`)
 		service = languageServices['css'];
 	}
 	return service;
@@ -51,15 +51,14 @@ export function findSymbols(selector: Selector, stylesheetMap: StylesheetMap): S
     .forEach(uri => {
       const { document, stylesheet } = stylesheetMap[uri];
       const symbols = getLanguageService(document).findDocumentSymbols(document, stylesheet);
-      console.log('Found ' + symbols.length + ' symbols in ' + uri);
-
+      console.log(`Found ${symbols.length} symbols in ${uri}`)
 
       symbols.forEach((symbol: SymbolInformation) => {
-        if(symbol.name.indexOf("&") !== -1) {
+        if (symbol.name.includes('&')) {
           // TODO: Handle nesting
         }
 
-        if(symbol.name.search(re) !== -1) {
+        if (symbol.name.search(re) !== -1) {
           foundSymbols.push(symbol)
         } else if (!classOrIdSelector) {
           // Special case for tag selectors - match "*" as the rightmost character
