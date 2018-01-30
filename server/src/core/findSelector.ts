@@ -24,11 +24,11 @@ export default function findSelector(document: TextDocument, position: Position)
 
   let delimeters = [' ', '\'', '"', '\n', '<']
 
-  while (start > 0 && !delimeters.includes(text.charAt(start - 1))) {
+  while (start > 0 && delimeters.indexOf(text.charAt(start - 1)) === -1) {
     start -= 1
   }
   
-  while (end < text.length && !delimeters.includes(text.charAt(end))) {
+  while (end < text.length && delimeters.indexOf(text.charAt(end)) === -1) {
     end += 1
   }
 
