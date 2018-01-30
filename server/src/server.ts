@@ -28,7 +28,7 @@ let activeLanguages: string[];
 // A list of file extensions to lookup for style definitions (defaults to .css, .scss and .less)
 let fileSearchExtensions: string[]
 
-let onFileOpen = (event) => {
+let onFileOpen = (event: any) => {
   connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Document opened: ${event.document.uri}`);
   if (fileSearchExtensions.indexOf('.' + event.document.languageId) > -1) {
     const uri = event.document.uri;
