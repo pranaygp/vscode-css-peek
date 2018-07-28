@@ -30,10 +30,22 @@ function getSelection(selector: Selector): string {
   }
 }
 
+function getNodeSelectorName(nodeSelector: Array<SymbolInformation>): string{
+  return nodeSelector.reduce( (acc: string, value: SymbolInformation) => {
+      return acc + value.name;
+  }, '');
+}
+
+function prepareNestedSymbol(symbol: SymbolInformation): SymbolInformation{
+  symbol.name = symbol.name.replace('&', '');
+  return symbol;
+}
+
 export function findSymbols(selector: Selector, stylesheetMap: StylesheetMap): SymbolInformation[] {
   console.log('Searching for symbol')
   const foundSymbols: SymbolInformation[] = [];
-  
+  let nodeSelector: Array<any>;
+
   let selection = getSelection(selector);
   const classOrIdSelector = selector.attribute === 'class' || selector.attribute === 'id';
   
@@ -54,10 +66,15 @@ export function findSymbols(selector: Selector, stylesheetMap: StylesheetMap): S
         const symbols = getLanguageService(document).findDocumentSymbols(document, stylesheet);
         console.log('Found ' + symbols.length + ' symbols in ' + uri);
 
-
+        nodeSelector = [];
         symbols.forEach((symbol: SymbolInformation) => {
-          if(symbol.name.indexOf("&") !== -1) {
-            // TODO: Handle nesting
+          if (symbol.name.startsWith("&")) {
+              nodeSelector.push( prepareNestedSymbol(symbol) );
+          }else{
+              if(nodeSelector.length >= 2 && getNodeSelectorName(nodeSelector).search(re) !== -1){
+                  foundSymbols.push(nodeSelector.pop());
+              }
+              nodeSelector = [symbol];
           }
 
           if(symbol.name.search(re) !== -1) {
