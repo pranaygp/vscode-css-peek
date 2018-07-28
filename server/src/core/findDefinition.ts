@@ -30,7 +30,7 @@ function getSelection(selector: Selector): string {
   }
 }
 
-function getNodeSelectorName(nodeSelector: Array<SymbolInformation>): string{
+function getNodeSelectorName(nodeSelector: SymbolInformation[]): string{
   return nodeSelector.reduce( (acc: string, value: SymbolInformation) => {
       return acc + value.name;
   }, '');
@@ -44,7 +44,7 @@ function prepareNestedSymbol(symbol: SymbolInformation): SymbolInformation{
 export function findSymbols(selector: Selector, stylesheetMap: StylesheetMap): SymbolInformation[] {
   console.log('Searching for symbol')
   const foundSymbols: SymbolInformation[] = [];
-  let nodeSelector: Array<any>;
+  let nodeSelector: SymbolInformation[] = [];
 
   let selection = getSelection(selector);
   const classOrIdSelector = selector.attribute === 'class' || selector.attribute === 'id';
