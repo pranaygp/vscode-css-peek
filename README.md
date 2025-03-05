@@ -2,17 +2,9 @@
 ![Visual Studio Marketplace Version (including pre-releases)](https://img.shields.io/visual-studio-marketplace/v/pranaygp.vscode-css-peek?logo=visualstudiocode)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-vscode--css--peek-purple)](https://open-vsx.org/extension/pranaygp/vscode-css-peek)
 
-# Backed By
+# 🔍 CSS Peek
 
-<p><a title="Try Windsor" href="https://windsor.io/?utm_source=vscmarket&amp;utm_campaign=pranaygp_css_peek&amp;utm_medium=banner"><img src="https://res.cloudinary.com/windsorio/image/upload/v1688631831/logo/blob_nxyzw7.png"></a></br>
-Record once, scale to a million. Windsor's novel AI lets businesses easily scale personalized videos. Now you can use personal videos for sales, ecommerce, education, recruiting, or anything else, without the effort.<br> <a title="Try Windsor" href="https://windsor.io/?utm_source=vscmarket&amp;utm_campaign=pranaygp_css_peek&amp;utm_medium=banner">Learn More</a></p>
-<br>
-<p><a title="Try CodeStream" href="https://sponsorlink.codestream.com/?utm_source=vscmarket&amp;utm_campaign=pranaygp_css_peek&amp;utm_medium=banner"><img src="https://alt-images.codestream.com/codestream_logo_pranaygp_css_peek.png"></a></br>
-Manage pull requests and conduct code reviews in your IDE with full source-tree context. Comment on any line, not just the diffs. Use jump-to-definition, your favorite keybindings, and code intelligence with more of your workflow.<br> <a title="Try CodeStream" href="https://sponsorlink.codestream.com/?utm_source=vscmarket&amp;utm_campaign=pranaygp_css_peek&amp;utm_medium=banner">Learn More</a></p>
-
-# Functionality
-
-This extension extends HTML and ejs code editing with `Go To Definition` and `Go To Symbol in Workspace` support for css/scss/less (classes and IDs) found in strings within the source code.
+This extension adds support for `Go To Definition` and `Go To Symbol in Workspace` for css/scss/less classes and IDs found in HTML/React/Vue/Svelte/Pug/ejs/etc.
 
 This was heavily inspired by a similar feature in [Brackets](http://brackets.io/) called CSS Inline Editors.
 
