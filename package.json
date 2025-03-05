@@ -5,7 +5,7 @@
   "author": "Pranay Prakash <pranay.gp@gmail.com>",
   "icon": "css_peek_icon.png",
   "license": "MIT",
-  "version": "4.4.1",
+  "version": "4.4.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/pranaygp/vscode-css-peek"
