@@ -1,8 +1,5 @@
 import * as path from "path";
-import {
-  Location,
-  SymbolInformation,
-} from "vscode-languageserver/node";
+import { Location, SymbolInformation } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   getCSSLanguageService,

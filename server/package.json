@@ -8,6 +8,7 @@
     "url": "https://github.com/pranaygp/vscode-css-peek"
   },
   "dependencies": {
+    "@vscode/extension-telemetry": "^0.8.1",
     "minimatch": "^9.0.3",
     "vscode-css-languageservice": "^6.2.6",
     "vscode-html-languageservice": "^5.0.6",

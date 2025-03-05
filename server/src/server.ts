@@ -92,6 +92,8 @@ documents.listen(connection);
 /* Server Initialization */
 connection.onInitialize((params) => {
   create(connection.console);
+  // connection.onShutdown(() => reporter.dispose());
+
   const capabilities = params.capabilities;
 
   workspaceFolder = params.rootUri;
