@@ -81,7 +81,10 @@ export default function findSelector(
             "typescriptreact",
           ].includes(document.languageId)
         ) {
-          if (selectorWord[0].toUpperCase() === selectorWord[0]) {
+          if (
+            selectorWord[0] &&
+            selectorWord[0].toUpperCase() === selectorWord[0]
+          ) {
             // if the first letter is uppercase, this is a JSX component
             break;
           }
