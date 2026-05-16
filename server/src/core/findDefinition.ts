@@ -33,15 +33,23 @@ export function getLanguageService(document: TextDocument) {
   return service;
 }
 
-function getSelection(selector: Selector): string {
-  switch (selector.attribute) {
-    case "id":
-      return "#" + selector.value;
-    case "class":
-      return "." + selector.value;
-    default:
-      return selector.value;
+// Escape regex meta-chars in a selector value. For chars that CSS requires
+// to be backslash-escaped inside identifiers (`:` and `/`, used by Tailwind
+// for variants and arbitrary-value modifiers), accept an optional backslash
+// in the compiled stylesheet so e.g. `.md\:flex` matches the source class
+// `md:flex` from HTML.
+function escapeSelectorForRegex(value: string): string {
+  let out = "";
+  for (const ch of value) {
+    if (ch === ":" || ch === "/") {
+      out += "\\\\?\\" + ch;
+    } else if (/[.*+?^${}()|[\]\\]/.test(ch)) {
+      out += "\\" + ch;
+    } else {
+      out += ch;
+    }
   }
+  return out;
 }
 
 function resolveSymbolName(symbols: SymbolInformation[], i: number): string {
@@ -73,18 +81,27 @@ export function findSymbols(
   };
 
   // Construct RegExp of selector to test against the symbols
-  let selection = getSelection(selector);
   const classOrIdSelector =
     selector.attribute === "class" || selector.attribute === "id";
-  if (selection[0] === ".") {
-    selection = "\\" + selection;
-  }
-  if (!classOrIdSelector) {
-    // Tag selectors must have nothing, whitespace, or a combinator before it.
-    selection = "(^|[\\s>+~])" + selection;
+  const escapedValue = escapeSelectorForRegex(selector.value);
+  let selection: string;
+  switch (selector.attribute) {
+    case "id":
+      selection = "#" + escapedValue;
+      break;
+    case "class":
+      selection = "\\." + escapedValue;
+      break;
+    default:
+      // Tag selector — value is a tag name, no escaping of special CSS chars needed.
+      selection = "(^|[\\s>+~])" + escapedValue;
+      break;
   }
 
-  selection += "(\\[[^\\]]*\\]|:{1,2}[\\w-()]+|\\.[\\w-]+|#[\\w-]+)*\\s*";
+  // Suffix matcher: allow chained selectors, including class/id names that
+  // contain CSS-escaped chars like `\:` or `\/` (Tailwind).
+  selection +=
+    "(\\[[^\\]]*\\]|:{1,2}[\\w-()]+|\\.[\\w\\\\:/-]+|#[\\w\\\\:/-]+)*\\s*";
 
   // This regular expression will be used to test the symbol
   const symbolRegexp = new RegExp(

@@ -195,3 +195,38 @@ suite("findDefinition with embedded <style> blocks", () => {
     assert.deepStrictEqual(embedded, {});
   });
 });
+
+suite("findDefinition — special characters", () => {
+  create(console as any);
+  let map: StylesheetMap;
+  suiteSetup(async () => {
+    map = await loadStylesheets(["tailwind.css"]);
+  });
+
+  test("finds Tailwind variant `md:flex` (escaped `.md\\:flex`)", () => {
+    const selector: Selector = { attribute: "class", value: "md:flex" };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+
+  test("finds slash-value class `bg-red-500/50`", () => {
+    const selector: Selector = {
+      attribute: "class",
+      value: "bg-red-500/50",
+    };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+
+  test("finds Unicode class name `café`", () => {
+    const selector: Selector = { attribute: "class", value: "café" };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+
+  test("finds class `style:sm` (issue #150)", () => {
+    const selector: Selector = { attribute: "class", value: "style:sm" };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+});

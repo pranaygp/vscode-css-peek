@@ -29,13 +29,14 @@ export default function findSelector(
   let end = offset;
 
   // expand selection to this word specifically
+  // NOTE: `/` is intentionally not a boundary so Tailwind-style class names
+  // like `bg-red-500/50` (and escaped forms like `md\:flex`) are captured.
   while (
     start > 0 &&
     text.charAt(start - 1) !== " " &&
     text.charAt(start - 1) !== "'" &&
     text.charAt(start - 1) !== '"' &&
     text.charAt(start - 1) !== "\n" &&
-    text.charAt(start - 1) !== "/" &&
     text.charAt(start - 1) !== "<"
   )
     start -= 1;
