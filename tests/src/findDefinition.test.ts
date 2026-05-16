@@ -10,6 +10,7 @@ import {
   findDefinition,
   findSymbols,
 } from "../../server/out/core/findDefinition";
+import { extractEmbeddedStylesheets } from "../../server/out/core/embeddedStyles";
 import { create } from "../../server/out/logger";
 import type { StylesheetMap, Selector } from "../../server/src/types";
 
@@ -130,5 +131,67 @@ suite("findDefinition", () => {
       defs.length > 0,
       "class selectors should still resolve when peekVariables=false"
     );
+  });
+});
+
+suite("findDefinition with embedded <style> blocks", () => {
+  create(console as any);
+
+  async function loadHostDoc(file: string) {
+    const vscodeDoc = await vscode.workspace.openTextDocument(
+      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+    );
+    return ServerTextDocument.create(
+      vscodeDoc.uri.toString(),
+      vscodeDoc.languageId,
+      vscodeDoc.version,
+      vscodeDoc.getText()
+    );
+  }
+
+  test("finds class defined in a <style> block of the same HTML file", async () => {
+    const hostDoc = await loadHostDoc("example.html");
+    const embedded = extractEmbeddedStylesheets(hostDoc);
+    assert.ok(Object.keys(embedded).length > 0, "should find a <style> block");
+
+    const selector: Selector = { attribute: "class", value: "embedded-class" };
+    const defs = findDefinition(selector, {}, { embeddedStylesheetMap: embedded });
+
+    assert.strictEqual(defs.length, 1);
+    // The returned location should reference the host HTML file (peek
+    // navigates the user to the embedded <style> region in the original
+    // file, not to some synthetic URI).
+    assert.strictEqual(defs[0].uri, hostDoc.uri);
+
+    // Verify the location points at the actual `.embedded-class` rule by
+    // grabbing the slice of host text at the returned range.
+    const text = hostDoc.getText();
+    const startOffset = hostDoc.offsetAt(defs[0].range.start);
+    assert.ok(
+      text.slice(startOffset).startsWith(".embedded-class"),
+      `expected text at definition to start with ".embedded-class", got: ${text.slice(
+        startOffset,
+        startOffset + 40
+      )}`
+    );
+  });
+
+  test("finds id defined in a <style> block of the same HTML file", async () => {
+    const hostDoc = await loadHostDoc("example.html");
+    const embedded = extractEmbeddedStylesheets(hostDoc);
+
+    const selector: Selector = { attribute: "id", value: "embedded-id" };
+    const defs = findDefinition(selector, {}, { embeddedStylesheetMap: embedded });
+
+    assert.strictEqual(defs.length, 1);
+    assert.strictEqual(defs[0].uri, hostDoc.uri);
+    const startOffset = hostDoc.offsetAt(defs[0].range.start);
+    assert.ok(hostDoc.getText().slice(startOffset).startsWith("#embedded-id"));
+  });
+
+  test("returns nothing for non-html/vue documents", async () => {
+    const cssDoc = await loadHostDoc("stylesheet.css");
+    const embedded = extractEmbeddedStylesheets(cssDoc);
+    assert.deepStrictEqual(embedded, {});
   });
 });

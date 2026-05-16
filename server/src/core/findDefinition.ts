@@ -55,10 +55,22 @@ function resolveSymbolName(symbols: SymbolInformation[], i: number): string {
 export function findSymbols(
   selector: Selector,
   stylesheetMap: StylesheetMap,
-  options: { peekVariables?: boolean } = {}
+  options: {
+    peekVariables?: boolean;
+    embeddedStylesheetMap?: StylesheetMap;
+  } = {}
 ): SymbolInformation[] {
-  const { peekVariables = true } = options;
+  const { peekVariables = true, embeddedStylesheetMap = {} } = options;
   const foundSymbols: SymbolInformation[] = [];
+
+  // Merge the persistent stylesheet cache with any in-memory embedded
+  // stylesheets (e.g. `<style>` blocks in HTML/Vue). The persistent cache
+  // wins on key collision; embedded entries always use fragment-suffixed
+  // keys so collisions don't happen in practice.
+  const combinedMap: StylesheetMap = {
+    ...embeddedStylesheetMap,
+    ...stylesheetMap,
+  };
 
   // Construct RegExp of selector to test against the symbols
   let selection = getSelection(selector);
@@ -84,8 +96,8 @@ export function findSymbols(
   const fileRegexp = new RegExp(selection, classOrIdSelector ? "" : "i");
 
   // Test all the symbols against the RegExp
-  Object.keys(stylesheetMap).forEach((uri) => {
-    const styleSheet = stylesheetMap[uri];
+  Object.keys(combinedMap).forEach((uri) => {
+    const styleSheet = combinedMap[uri];
     try {
       let symbols: SymbolInformation[];
       if (styleSheet.symbols) {
@@ -147,7 +159,10 @@ export function findSymbols(
 export function findDefinition(
   selector: Selector,
   stylesheetMap: StylesheetMap,
-  options: { peekVariables?: boolean } = {}
+  options: {
+    peekVariables?: boolean;
+    embeddedStylesheetMap?: StylesheetMap;
+  } = {}
 ): Location[] {
   return findSymbols(selector, stylesheetMap, options).map(
     ({ location }) => location
