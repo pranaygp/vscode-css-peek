@@ -22,6 +22,7 @@ import {
   sendTelemetryErrorEvent,
   setTelemetryEnabled,
 } from "./telemetry";
+import { readGitignoreGlobs } from "./gitignore";
 
 const SUPPORTED_EXTENSIONS = ["css", "scss", "less"];
 const SUPPORTED_EXTENSION_REGEX = /\.(css|scss|less)$/;
@@ -103,6 +104,7 @@ export function activate(context: ExtensionContext): void {
     "peekToLinkedOnly",
     false
   ) as boolean;
+  const respectGitignore: boolean = config.get("respectGitignore") as boolean;
 
   function didOpenTextDocument(document: TextDocument): void {
     try {
@@ -191,54 +193,65 @@ export function activate(context: ExtensionContext): void {
       telemetryData.workspaceFolder = folder;
 
       if (!clients.has(folder.uri.toString())) {
-        Workspace.findFiles(
-          `{${(peekToInclude || []).join(",")}}`,
-          `{${(peekToExclude || []).join(",")}}`
-        ).then((file_searches) => {
-          const potentialFiles: Uri[] = file_searches.filter(
-            (uri: Uri) => uri.scheme === "file"
-          );
+        const gitignorePromise = respectGitignore
+          ? readGitignoreGlobs(folder.uri)
+          : Promise.resolve([] as string[]);
 
-          const debugOptions = {
-            execArgv: ["--nolazy", `--inspect=${6011 + clients.size}`],
-          };
-          const serverOptions = {
-            run: { module, transport: TransportKind.ipc },
-            debug: {
-              module,
-              transport: TransportKind.ipc,
-              options: debugOptions,
-            },
-          };
-          const clientOptions: LanguageClientOptions = {
-            documentSelector,
-            diagnosticCollectionName: "css-peek",
-            synchronize: {
-              configurationSection: "cssPeek",
-            },
-            initializationOptions: {
-              stylesheets: potentialFiles.map((u) => ({
-                uri: u.toString(),
-                // TODO: don't rely on fsPath in a virtual workspace
-                // https://github.com/microsoft/vscode/wiki/Virtual-Workspaces
-                fsPath: u.fsPath,
-              })),
-              peekFromLanguages,
-              peekToLinkedOnly,
-            },
-            workspaceFolder: folder,
-            outputChannel,
-          };
-          const client = new LanguageClient(
-            "css-peek",
-            "CSS Peek",
-            serverOptions,
-            clientOptions
-          );
-          client.registerProposedFeatures();
-          client.start();
-          clients.set(folder.uri.toString(), client);
-        });
+        gitignorePromise
+          .then((gitignoreGlobs) => {
+            const mergedExcludes = Array.from(
+              new Set([...(peekToExclude || []), ...gitignoreGlobs])
+            );
+            return Workspace.findFiles(
+              `{${(peekToInclude || []).join(",")}}`,
+              `{${mergedExcludes.join(",")}}`
+            );
+          })
+          .then((file_searches) => {
+            const potentialFiles: Uri[] = file_searches.filter(
+              (uri: Uri) => uri.scheme === "file"
+            );
+
+            const debugOptions = {
+              execArgv: ["--nolazy", `--inspect=${6011 + clients.size}`],
+            };
+            const serverOptions = {
+              run: { module, transport: TransportKind.ipc },
+              debug: {
+                module,
+                transport: TransportKind.ipc,
+                options: debugOptions,
+              },
+            };
+            const clientOptions: LanguageClientOptions = {
+              documentSelector,
+              diagnosticCollectionName: "css-peek",
+              synchronize: {
+                configurationSection: "cssPeek",
+              },
+              initializationOptions: {
+                stylesheets: potentialFiles.map((u) => ({
+                  uri: u.toString(),
+                  // TODO: don't rely on fsPath in a virtual workspace
+                  // https://github.com/microsoft/vscode/wiki/Virtual-Workspaces
+                  fsPath: u.fsPath,
+                })),
+                peekFromLanguages,
+                peekToLinkedOnly,
+              },
+              workspaceFolder: folder,
+              outputChannel,
+            };
+            const client = new LanguageClient(
+              "css-peek",
+              "CSS Peek",
+              serverOptions,
+              clientOptions
+            );
+            client.registerProposedFeatures();
+            client.start();
+            clients.set(folder.uri.toString(), client);
+          });
       }
       sendTelemetryEvent("Document Opened", telemetryData);
     } catch (e) {

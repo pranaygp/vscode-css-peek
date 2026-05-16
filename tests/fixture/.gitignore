@@ -1,0 +1,7 @@
+# Fixture .gitignore used by gitignore.test.ts to verify
+# that readGitignoreGlobs parses a workspace-root .gitignore.
+# These paths intentionally do not match any real fixture file.
+excluded.css
+/anchored-build
+dist/
+!unignore.css
