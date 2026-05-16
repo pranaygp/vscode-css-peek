@@ -25,12 +25,22 @@ In addition, it supports the Symbol Provider so you can quickly jump to the righ
 - `cssPeek.supportTags` - Enable Peeking from HTML tags in addition to classnames and IDs. React components are ignored, but it's a good idea to disable this feature when using Angular.
 - `cssPeek.peekFromLanguages` - A list of vscode language names where the extension should be used.
 - `cssPeek.peekToExclude` - A list of file globs that filters out style files to not look for. By default, `node_modules` and `bower_components`
+- `cssPeek.enableTelemetry` - Send anonymous usage data and error reports to help improve CSS Peek. Defaults to `true`. Set to `false` to opt out.
 
 See editor docs for more details
 
 - [Visual Studio Code: Goto Definition](https://code.visualstudio.com/docs/editor/editingevolved#_go-to-definition)
 - [Visual Studio Code: Peek](https://code.visualstudio.com/docs/editor/editingevolved#_peek)
 - [Visual Studio Code: Open Symbol By Name](https://code.visualstudio.com/Docs/editor/editingevolved#_open-symbol-by-name)
+
+## Telemetry
+
+CSS Peek collects anonymous usage data and error reports to help improve the extension. There are **two** ways to opt out:
+
+1. **Disable for this extension only.** Set `"cssPeek.enableTelemetry": false` in your VSCode settings.
+2. **Disable telemetry for all extensions.** Set VSCode's global `"telemetry.telemetryLevel": "off"` (see [VSCode telemetry docs](https://code.visualstudio.com/docs/configure/telemetry)). CSS Peek honors this setting automatically via `@vscode/extension-telemetry`.
+
+Either setting will prevent CSS Peek from sending any telemetry events.
 
 # Contributing
 

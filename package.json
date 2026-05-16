@@ -117,6 +117,12 @@
           ],
           "default": "off",
           "description": "Traces the communication between VSCode and the language server."
+        },
+        "cssPeek.enableTelemetry": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Send anonymous usage data and error reports to help improve CSS Peek. Set to false to opt out. The extension also honors VSCode's global `telemetry.telemetryLevel` setting, so disabling telemetry there will also disable it here."
         }
       }
     }
