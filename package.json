@@ -62,6 +62,12 @@
           "default": true,
           "description": "Enable Peeking from HTML tags in addition to classnames and IDs. React components are ignored, but it's a good idea to disable this feature when using Angular"
         },
+        "cssPeek.peekVariables": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Include preprocessor variable definitions (e.g. SCSS `$foo`, LESS `@foo`) in peek results. Disable to hide variables from go-to and peek definition."
+        },
         "cssPeek.peekFromLanguages": {
           "scope": "window",
           "type": "array",
