@@ -113,6 +113,12 @@
           },
           "description": "A list of file globs that filters out peekable files"
         },
+        "cssPeek.peekToLinkedOnly": {
+          "scope": "window",
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, peek targets are restricted to stylesheets that are referenced from the current source file (e.g. via <link rel=\"stylesheet\" href=\"...\"> in HTML or `import './foo.css'` / `@import 'foo.css'` in JS/TS/SCSS). Useful in large monorepos to avoid matching unrelated stylesheets."
+        },
         "cssPeek.trace.server": {
           "scope": "window",
           "type": "string",

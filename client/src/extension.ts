@@ -99,6 +99,10 @@ export function activate(context: ExtensionContext): void {
   const peekToExclude: Array<string> = config.get(
     "peekToExclude"
   ) as Array<string>;
+  const peekToLinkedOnly: boolean = config.get(
+    "peekToLinkedOnly",
+    false
+  ) as boolean;
 
   function didOpenTextDocument(document: TextDocument): void {
     try {
@@ -159,6 +163,7 @@ export function activate(context: ExtensionContext): void {
           initializationOptions: {
             stylesheets: [],
             peekFromLanguages,
+            peekToLinkedOnly,
           },
           diagnosticCollectionName: "css-peek",
           outputChannel,
@@ -219,6 +224,7 @@ export function activate(context: ExtensionContext): void {
                 fsPath: u.fsPath,
               })),
               peekFromLanguages,
+              peekToLinkedOnly,
             },
             workspaceFolder: folder,
             outputChannel,

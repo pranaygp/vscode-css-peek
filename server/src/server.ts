@@ -28,6 +28,7 @@ import {
   extractEmbeddedStylesheets,
   hasEmbeddedStyles,
 } from "./core/embeddedStyles";
+import { findLinkedStylesheets } from "./utils/linkedStylesheets";
 import { create } from "./logger";
 
 // Creates the LSP connection
@@ -137,6 +138,7 @@ interface Settings {
   peekVariables: boolean;
   peekFromLanguages: string[];
   peekToExclude: string[];
+  peekToLinkedOnly: boolean;
 }
 connection.onInitialized(() => {
   if (hasConfigurationCapability) {
@@ -158,6 +160,7 @@ const defaultSettings: Settings = {
   peekVariables: true,
   peekFromLanguages: ["html"],
   peekToExclude: ["**/node_modules/**", "**/bower_components/**"],
+  peekToLinkedOnly: false,
 };
 let globalSettings: Settings = defaultSettings;
 
@@ -241,9 +244,14 @@ connection.onDefinition(
       ? extractEmbeddedStylesheets(document)
       : {};
 
+    const allowedUris = settings.peekToLinkedOnly
+      ? new Set(findLinkedStylesheets(document))
+      : undefined;
+
     return findDefinition(selector, styleSheets, {
       peekVariables: settings.peekVariables,
       embeddedStylesheetMap,
+      allowedUris,
     });
   }
 );
