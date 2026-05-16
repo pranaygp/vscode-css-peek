@@ -10,6 +10,7 @@ import {
   TextDocumentSyncKind,
   TextDocumentPositionParams,
   Definition,
+  Hover,
   InitializeParams,
   DidChangeConfigurationNotification,
 } from "vscode-languageserver/node";
@@ -22,6 +23,7 @@ import {
   findDefinition,
   isLanguageServiceSupported,
 } from "./core/findDefinition";
+import { findHover } from "./core/findHover";
 import { create } from "./logger";
 
 // Creates the LSP connection
@@ -119,6 +121,7 @@ connection.onInitialize((params) => {
         change: TextDocumentSyncKind.Full,
       },
       definitionProvider: true,
+      hoverProvider: true,
       workspaceSymbolProvider: true,
     },
   };
@@ -228,6 +231,31 @@ connection.onDefinition(
     }
 
     return findDefinition(selector, styleSheets, {
+      peekVariables: settings.peekVariables,
+    });
+  }
+);
+
+connection.onHover(
+  async (
+    textDocumentPositon: TextDocumentPositionParams
+  ): Promise<Hover | null> => {
+    const documentIdentifier = textDocumentPositon.textDocument;
+    const position = textDocumentPositon.position;
+
+    const document = documents.get(documentIdentifier.uri);
+
+    if (!document || !(await isValidPeekSource(document))) {
+      return null;
+    }
+    const settings = await getDocumentSettings(document.uri);
+
+    const selector: Selector = findSelector(document, position, settings);
+    if (!selector) {
+      return null;
+    }
+
+    return findHover(selector, styleSheets, {
       peekVariables: settings.peekVariables,
     });
   }
