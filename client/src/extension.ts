@@ -16,13 +16,15 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 
-import { initializeReporter } from "./telemetry";
-import TelemetryReporter from "@vscode/extension-telemetry";
+import {
+  initializeReporter,
+  sendTelemetryEvent,
+  sendTelemetryErrorEvent,
+  setTelemetryEnabled,
+} from "./telemetry";
 
 const SUPPORTED_EXTENSIONS = ["css", "scss", "less"];
 const SUPPORTED_EXTENSION_REGEX = /\.(css|scss|less)$/;
-
-let reporter: TelemetryReporter = null;
 
 let defaultClient: LanguageClient;
 const clients: Map<string, LanguageClient> = new Map();
@@ -65,24 +67,38 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 }
 
 export function activate(context: ExtensionContext): void {
-  reporter = initializeReporter();
+  const config: WorkspaceConfiguration = Workspace.getConfiguration("cssPeek");
+  const telemetryEnabled: boolean = config.get("enableTelemetry", true);
+
+  const reporter = initializeReporter(telemetryEnabled);
   context.subscriptions.push(reporter);
 
-  reporter.sendTelemetryEvent("Activate Extension", { context: "client" });
+  context.subscriptions.push(
+    Workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("cssPeek.enableTelemetry")) {
+        const updated = Workspace.getConfiguration("cssPeek").get(
+          "enableTelemetry",
+          true
+        );
+        setTelemetryEnabled(updated);
+      }
+    })
+  );
+
+  sendTelemetryEvent("Activate Extension", { context: "client" });
 
   const module = context.asAbsolutePath(
     path.join("server", "out", "server.js")
   );
   const outputChannel: OutputChannel = Window.createOutputChannel("CSS Peek");
 
-  const config: WorkspaceConfiguration = Workspace.getConfiguration("cssPeek");
   const peekFromLanguages: Array<string> = config.get(
     "peekFromLanguages"
   ) as Array<string>;
   const peekToInclude = SUPPORTED_EXTENSIONS.map((l) => `**/*.${l}`);
-  const peekToExclude: Array<string> = config.get("peekToExclude") as Array<
-    string
-  >;
+  const peekToExclude: Array<string> = config.get(
+    "peekToExclude"
+  ) as Array<string>;
 
   function didOpenTextDocument(document: TextDocument): void {
     try {
@@ -155,14 +171,14 @@ export function activate(context: ExtensionContext): void {
         );
         defaultClient.registerProposedFeatures();
         defaultClient.start();
-        reporter.sendTelemetryEvent("Document Opened", telemetryData);
+        sendTelemetryEvent("Document Opened", telemetryData);
         return;
       }
       let folder = Workspace.getWorkspaceFolder(uri);
       // Files outside a folder can't be handled. This might depend on the language.
       // Single file languages like JSON might handle files outside the workspace folders.
       if (!folder) {
-        reporter.sendTelemetryEvent("Document Opened", telemetryData);
+        sendTelemetryEvent("Document Opened", telemetryData);
         return;
       }
       // If we have nested workspace folders we only start a server on the outer most workspace folder.
@@ -218,9 +234,9 @@ export function activate(context: ExtensionContext): void {
           clients.set(folder.uri.toString(), client);
         });
       }
-      reporter.sendTelemetryEvent("Document Opened", telemetryData);
+      sendTelemetryEvent("Document Opened", telemetryData);
     } catch (e) {
-      reporter.sendTelemetryErrorEvent(e, {
+      sendTelemetryErrorEvent(e instanceof Error ? e.message : String(e), {
         context: "client",
         method: "didOpenTextDocument",
       });
@@ -233,7 +249,7 @@ export function activate(context: ExtensionContext): void {
     for (const folder of event.removed) {
       const client = clients.get(folder.uri.toString());
       if (client) {
-        reporter.sendTelemetryEvent("Workspace Folder Closed", {
+        sendTelemetryEvent("Workspace Folder Closed", {
           context: "client",
           folderName: folder.name,
           uriAuthority: folder.uri.authority,
@@ -258,7 +274,7 @@ export function deactivate(): Thenable<void> {
   for (const client of clients.values()) {
     promises.push(client.stop());
   }
-  reporter.sendTelemetryEvent(
+  sendTelemetryEvent(
     "Deactivate Extension",
     { context: "client" },
     { activeClients: promises.length }
