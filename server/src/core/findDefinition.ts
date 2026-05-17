@@ -1,8 +1,5 @@
 import * as path from "path";
-import {
-  Location,
-  SymbolInformation,
-} from "vscode-languageserver/node";
+import { Location, SymbolInformation } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   getCSSLanguageService,
@@ -57,8 +54,10 @@ function resolveSymbolName(symbols: SymbolInformation[], i: number): string {
 
 export function findSymbols(
   selector: Selector,
-  stylesheetMap: StylesheetMap
+  stylesheetMap: StylesheetMap,
+  options: { peekVariables?: boolean } = {}
 ): SymbolInformation[] {
+  const { peekVariables = true } = options;
   const foundSymbols: SymbolInformation[] = [];
 
   // Construct RegExp of selector to test against the symbols
@@ -113,6 +112,9 @@ export function findSymbols(
       console.log(`Searching through them all for /${selection}/`);
 
       symbols.forEach((symbol, i) => {
+        if (!peekVariables && symbol.kind === SymbolKind.Variable) {
+          return;
+        }
         const name = resolveSymbolName(symbols, i);
 
         // console.log(
@@ -144,7 +146,10 @@ export function findSymbols(
 
 export function findDefinition(
   selector: Selector,
-  stylesheetMap: StylesheetMap
+  stylesheetMap: StylesheetMap,
+  options: { peekVariables?: boolean } = {}
 ): Location[] {
-  return findSymbols(selector, stylesheetMap).map(({ location }) => location);
+  return findSymbols(selector, stylesheetMap, options).map(
+    ({ location }) => location
+  );
 }

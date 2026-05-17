@@ -127,6 +127,7 @@ connection.onInitialize((params) => {
 /* Sync Configuration Settings */
 interface Settings {
   supportTags: boolean;
+  peekVariables: boolean;
   peekFromLanguages: string[];
   peekToExclude: string[];
 }
@@ -147,6 +148,7 @@ connection.onInitialized(() => {
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 const defaultSettings: Settings = {
   supportTags: true,
+  peekVariables: true,
   peekFromLanguages: ["html"],
   peekToExclude: ["**/node_modules/**", "**/bower_components/**"],
 };
@@ -225,11 +227,13 @@ connection.onDefinition(
       return null;
     }
 
-    return findDefinition(selector, styleSheets);
+    return findDefinition(selector, styleSheets, {
+      peekVariables: settings.peekVariables,
+    });
   }
 );
 
-connection.onWorkspaceSymbol(({ query }) => {
+connection.onWorkspaceSymbol(async ({ query }) => {
   if (query.length < 2) return [];
   const selectors: Selector[] = [
     {
@@ -246,8 +250,19 @@ connection.onWorkspaceSymbol(({ query }) => {
     },
   ];
 
+  const settings = hasConfigurationCapability
+    ? ((await connection.workspace.getConfiguration({
+        section: "cssPeek",
+      })) as Settings) || defaultSettings
+    : globalSettings;
+
   return selectors.reduce(
-    (p, selector) => [...p, ...findSymbols(selector, styleSheets)],
+    (p, selector) => [
+      ...p,
+      ...findSymbols(selector, styleSheets, {
+        peekVariables: settings.peekVariables,
+      }),
+    ],
     []
   );
 });
