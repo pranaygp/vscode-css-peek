@@ -8,21 +8,25 @@ export type StylesheetMap = {
   };
 };
 
-// Based off the `vscode` `Uri` namespace
-export type Uri = {
+// A stylesheet payload passed from the client during LSP initialization.
+// The client reads file contents via `vscode.workspace.fs.readFile`
+// (which works in virtual/web workspaces) and ships them to the server, so
+// the server never needs to touch the host file system itself.
+export type Stylesheet = {
   /**
    * The actual Uri string representation
    */
   readonly uri: string;
 
   /**
-   * The string representing the corresponding file system path of this Uri.
-   *
-   * Will handle UNC paths and normalize windows drive letters to lower-case. Also
-   * uses the platform specific path separator. Will *not* validate the path for
-   * invalid characters and semantics. Will *not* look at the scheme of this Uri.
+   * The language id of the stylesheet (e.g. "css", "scss", "less").
    */
-  readonly fsPath: string;
+  readonly languageId: string;
+
+  /**
+   * The full text content of the stylesheet.
+   */
+  readonly text: string;
 };
 
 export type Selector = { attribute: string; value: string };

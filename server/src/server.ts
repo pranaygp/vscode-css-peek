@@ -1,6 +1,5 @@
 "use strict";
 
-import fs = require("fs");
 import { minimatch } from "minimatch";
 import * as path from "path";
 import {
@@ -15,7 +14,7 @@ import {
   DidChangeConfigurationNotification,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { Uri, StylesheetMap, Selector } from "./types";
+import { Stylesheet, StylesheetMap, Selector } from "./types";
 
 import findSelector from "./core/findSelector";
 import {
@@ -197,7 +196,7 @@ documents.onDidClose((e) => {
 });
 
 function setupInitialStyleMap(params: InitializeParams) {
-  const styleFiles = params.initializationOptions.stylesheets;
+  const styleFiles: Stylesheet[] = params.initializationOptions.stylesheets;
 
   connection.console.log(
     `[Server(${process.pid}) ${path.basename(
@@ -205,14 +204,17 @@ function setupInitialStyleMap(params: InitializeParams) {
     )}/] Number of style sheets - ${styleFiles.length}`
   );
 
-  styleFiles.forEach((fileUri: Uri) => {
-    const languageId = fileUri.fsPath.split(".").slice(-1)[0];
-    // TODO: this is bad. stop using the file system directly. Instead, use the VSCode
-    // fs API to support the virutal filesystem
-    // https://github.com/microsoft/vscode/wiki/Virtual-Workspaces
-    const text = fs.readFileSync(fileUri.fsPath, "utf8");
-    const document = TextDocument.create(fileUri.uri, languageId, 1, text);
-    styleSheets[fileUri.uri] = {
+  // Stylesheet contents are read on the client (via `vscode.workspace.fs`)
+  // and shipped over LSP so the server never touches the host file system.
+  // This keeps the server compatible with virtual workspaces and the web build.
+  styleFiles.forEach((file) => {
+    const document = TextDocument.create(
+      file.uri,
+      file.languageId,
+      1,
+      file.text
+    );
+    styleSheets[file.uri] = {
       document,
     };
   });

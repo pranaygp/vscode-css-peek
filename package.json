@@ -30,7 +30,7 @@
     "workspace symbol"
   ],
   "engines": {
-    "vscode": "^1.33.0"
+    "vscode": "^1.37.0"
   },
   "main": "./client/out/extension",
   "browser": "./client/out/extension",
@@ -157,7 +157,7 @@
     },
     "virtualWorkspaces": {
       "supported": false,
-      "description": "The extension currently relies on the `fs` module but it should be easy to change this. Please make a PR to help."
+      "description": "The server no longer touches the host filesystem, but the client's documentSelector still gates on the `file` and `untitled` URI schemes. Expanding the selector to cover virtual schemes (e.g. `vscode-vfs`) is a separate change."
     }
   },
   "scripts": {

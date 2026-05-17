@@ -32,6 +32,73 @@ async function loadStylesheets(files: string[]): Promise<StylesheetMap> {
   return map;
 }
 
+/**
+ * Mirrors the production code path: the client reads file contents via
+ * `vscode.workspace.fs.readFile` (which works in virtual/web workspaces),
+ * ships `{uri, languageId, text}` tuples to the server, and the server
+ * materializes them into a `StylesheetMap` without touching `fs`.
+ *
+ * Uses `TextDecoder` (browser-safe) rather than `Buffer` to match the
+ * production code, which targets both Node and web extension hosts.
+ */
+const utf8Decoder = new TextDecoder("utf-8");
+async function loadStylesheetsViaWorkspaceFs(
+  files: string[]
+): Promise<StylesheetMap> {
+  const map: StylesheetMap = {};
+  for (const file of files) {
+    const uri = vscode.Uri.joinPath(
+      vscode.workspace.workspaceFolders![0].uri,
+      file
+    );
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const text = utf8Decoder.decode(bytes);
+    const languageId = file.split(".").pop() || "";
+    const serverDoc = ServerTextDocument.create(
+      uri.toString(),
+      languageId,
+      1,
+      text
+    );
+    map[serverDoc.uri] = { document: serverDoc };
+  }
+  return map;
+}
+
+/**
+ * Constructs a StylesheetMap whose entries have non-`file` URIs. This is the
+ * shape `setupInitialStyleMap` will encounter when running against a virtual
+ * workspace (e.g. GitHub Remote Repositories' `vscode-vfs://github/...`),
+ * once the client's documentSelector is broadened to those schemes. The
+ * server itself is scheme-agnostic — it only ever indexes by the URI string
+ * and reads text from the in-memory TextDocument.
+ */
+function buildVirtualStylesheetMap(): StylesheetMap {
+  const map: StylesheetMap = {};
+  const entries: Array<{ uri: string; languageId: string; text: string }> = [
+    {
+      uri: "vscode-vfs://github/example/repo/styles.css",
+      languageId: "css",
+      text: ".virtual-only { color: red; }\n#virtual-id { color: blue; }\n",
+    },
+    {
+      uri: "vscode-test-web:///workspace/extra.scss",
+      languageId: "scss",
+      text: ".virtual-only { font-weight: bold; }\n",
+    },
+  ];
+  for (const entry of entries) {
+    const doc = ServerTextDocument.create(
+      entry.uri,
+      entry.languageId,
+      1,
+      entry.text
+    );
+    map[doc.uri] = { document: doc };
+  }
+  return map;
+}
+
 suite("findDefinition", () => {
   create(console as any);
   let map: StylesheetMap;
@@ -81,6 +148,56 @@ suite("findDefinition", () => {
     assert.strictEqual(defs.length, 4);
     const lines = defs.map((d) => d.range.start.line);
     assert.deepStrictEqual(lines, [0, 16, 16, 19]);
+  });
+
+  test("stylesheets loaded via vscode.workspace.fs are discoverable", async () => {
+    // Exercises the same code path the extension client now uses to ship
+    // stylesheet contents to the server — no `fs` module involved.
+    const fsMap = await loadStylesheetsViaWorkspaceFs([
+      "stylesheet.css",
+      "example.less",
+      "example.scss",
+      "my_style.scss",
+      "extendFailureCase.less",
+    ]);
+
+    const classDefs = findDefinition(
+      { attribute: "class", value: "test" },
+      fsMap
+    );
+    assert.strictEqual(classDefs.length, 3);
+
+    const idDefs = findDefinition({ attribute: "id", value: "test-2" }, fsMap);
+    const idFiles = idDefs
+      .map((d) => vscode.Uri.parse(d.uri).path.split("/").pop())
+      .sort();
+    assert.deepStrictEqual(
+      idFiles,
+      ["example.less", "example.scss", "stylesheet.css"].sort()
+    );
+  });
+
+  test("resolves selectors across non-file URI schemes", () => {
+    // Verifies the server's scheme-agnosticism: once the client ships
+    // stylesheet payloads keyed by `vscode-vfs://` / `vscode-test-web://`
+    // URIs (virtual workspaces), findDefinition still resolves them and
+    // returns Locations on those schemes — no `file:` assumption anywhere.
+    const virtualMap = buildVirtualStylesheetMap();
+
+    const classDefs = findDefinition(
+      { attribute: "class", value: "virtual-only" },
+      virtualMap
+    );
+    assert.strictEqual(classDefs.length, 2);
+    const schemes = classDefs.map((d) => vscode.Uri.parse(d.uri).scheme).sort();
+    assert.deepStrictEqual(schemes, ["vscode-test-web", "vscode-vfs"]);
+
+    const idDefs = findDefinition(
+      { attribute: "id", value: "virtual-id" },
+      virtualMap
+    );
+    assert.strictEqual(idDefs.length, 1);
+    assert.strictEqual(vscode.Uri.parse(idDefs[0].uri).scheme, "vscode-vfs");
   });
 
   test("peekVariables toggle filters Variable-kind symbols", () => {
