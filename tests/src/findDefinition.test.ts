@@ -221,11 +221,28 @@ suite("findDefinition — special characters", () => {
   test("finds Unicode class name `café`", () => {
     const selector: Selector = { attribute: "class", value: "café" };
     const defs = findDefinition(selector, map);
-    assert.strictEqual(defs.length, 1);
+    // tailwind.css defines `.café`, `.foo.café`, and `h1.café` (chained
+    // Unicode selectors); resolving `café` should match all three.
+    assert.strictEqual(defs.length, 3);
   });
 
   test("finds class `style:sm` (issue #150)", () => {
     const selector: Selector = { attribute: "class", value: "style:sm" };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+
+  test("matches chained Unicode class selector `.foo.café`", () => {
+    // Resolving `foo` should match the chained rule `.foo.café` because
+    // the suffix matcher allows non-ASCII identifier chars after a `.`.
+    const selector: Selector = { attribute: "class", value: "foo" };
+    const defs = findDefinition(selector, map);
+    assert.strictEqual(defs.length, 1);
+  });
+
+  test("matches chained Unicode tag selector `h1.café`", () => {
+    // Resolving the `h1` tag should match the chained rule `h1.café`.
+    const selector: Selector = { attribute: null as any, value: "h1" };
     const defs = findDefinition(selector, map);
     assert.strictEqual(defs.length, 1);
   });

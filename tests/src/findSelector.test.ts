@@ -79,6 +79,18 @@ suite("findSelector across fixtures", () => {
         assert.equal(selector.value, "h1");
       });
 
+      test("detects html tag in closing tag (e.g. </h1>)", () => {
+        const p = pos("</h1>", "</".length);
+        const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.notEqual(
+          selector,
+          null,
+          "expected closing-tag scan to produce a selector"
+        );
+        assert.equal(selector.attribute, null);
+        assert.equal(selector.value, "h1");
+      });
+
       test("respects supportTags option", () => {
         const p = pos("<h1", 1);
         const selector = findSelector(docs.serverDoc, p, {

@@ -13,3 +13,11 @@
 .style\:sm {
   font-size: 0.875rem;
 }
+
+.foo.café {
+  color: maroon;
+}
+
+h1.café {
+  font-weight: 700;
+}
