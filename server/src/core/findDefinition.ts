@@ -68,9 +68,14 @@ export function findSymbols(
   options: {
     peekVariables?: boolean;
     embeddedStylesheetMap?: StylesheetMap;
+    allowedUris?: Set<string>;
   } = {}
 ): SymbolInformation[] {
-  const { peekVariables = true, embeddedStylesheetMap = {} } = options;
+  const {
+    peekVariables = true,
+    embeddedStylesheetMap = {},
+    allowedUris,
+  } = options;
   const foundSymbols: SymbolInformation[] = [];
 
   // Merge the persistent stylesheet cache with any in-memory embedded
@@ -126,6 +131,9 @@ export function findSymbols(
 
   // Test all the symbols against the RegExp
   Object.keys(combinedMap).forEach((uri) => {
+    if (allowedUris && !allowedUris.has(uri)) {
+      return;
+    }
     const styleSheet = combinedMap[uri];
     try {
       let symbols: SymbolInformation[];
@@ -191,6 +199,7 @@ export function findDefinition(
   options: {
     peekVariables?: boolean;
     embeddedStylesheetMap?: StylesheetMap;
+    allowedUris?: Set<string>;
   } = {}
 ): Location[] {
   return findSymbols(selector, stylesheetMap, options).map(
