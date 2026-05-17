@@ -4,15 +4,27 @@ import { workspace as Workspace, Uri } from "vscode";
  * Convert a single `.gitignore` pattern line into one or more VS Code glob
  * patterns.
  *
- * Returns an empty array for lines that should be skipped (blank, comment,
- * negation, or patterns we can't represent as a simple glob).
+ * Lines explicitly skipped (returns an empty array):
+ *   - blank lines (after trimming)
+ *   - comments (lines starting with `#`)
+ *   - negation lines (lines starting with `!`)
+ *   - lines that reduce to an empty pattern after stripping a leading `/`
+ *     or trailing `/`
  *
- * Best-effort conversion covering common cases (directory names, file names,
- * simple globs). When the line could match either a file or a directory, we
- * emit both globs since VS Code globs distinguish files from folders.
+ * All other lines are passed through with minimal rewriting (anchoring,
+ * directory-vs-file expansion, bare-name -> `**\/name` lift). This is a
+ * best-effort conversion covering the common cases (directory names, file
+ * names, simple `*` globs). When the line could match either a file or a
+ * directory, we emit both globs since VS Code globs distinguish files from
+ * folders.
  *
- * Known limitations: negation lines (`!pattern`), character classes, and
- * patterns with `**` semantics that differ from gitignore are not handled.
+ * Unsupported gitignore constructs are NOT detected — they are passed
+ * through verbatim and may produce wrong or best-effort matches:
+ *   - character classes (e.g. `[abc]`, `[!a-z]`)
+ *   - escape sequences (`\#`, `\!`, `\ `)
+ *   - `**` in positions where gitignore semantics differ from VS Code's
+ *     glob semantics (common shapes like `foo/**` and `**\/foo` work;
+ *     exotic placements may not)
  */
 export function gitignoreLineToGlob(rawLine: string): string[] {
   const line = rawLine.trim();
@@ -53,8 +65,11 @@ export function gitignoreLineToGlob(rawLine: string): string[] {
  * Read the workspace root's `.gitignore` and return a set of VS Code glob
  * patterns that approximate its semantics.
  *
- * Uses `vscode.workspace.fs` so it works in virtual workspaces. Returns an
- * empty array if the file does not exist or cannot be read.
+ * Uses `vscode.workspace.fs` (rather than Node `fs`) so the reader itself
+ * is not tied to local disk. Note: the extension as a whole does not yet
+ * declare virtual-workspace support — see `capabilities.virtualWorkspaces`
+ * in `package.json` and the server's direct `fs` usage. Returns an empty
+ * array if the file does not exist or cannot be read.
  */
 export async function readGitignoreGlobs(
   workspaceRoot: Uri
