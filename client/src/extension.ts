@@ -66,9 +66,14 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
   return folder;
 }
 
+function readTelemetryEnabled(config: WorkspaceConfiguration): boolean {
+  const raw = config.get("enableTelemetry");
+  return typeof raw === "boolean" ? raw : true;
+}
+
 export function activate(context: ExtensionContext): void {
   const config: WorkspaceConfiguration = Workspace.getConfiguration("cssPeek");
-  const telemetryEnabled: boolean = config.get("enableTelemetry", true);
+  const telemetryEnabled: boolean = readTelemetryEnabled(config);
 
   const reporter = initializeReporter(telemetryEnabled);
   context.subscriptions.push(reporter);
@@ -76,9 +81,8 @@ export function activate(context: ExtensionContext): void {
   context.subscriptions.push(
     Workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("cssPeek.enableTelemetry")) {
-        const updated = Workspace.getConfiguration("cssPeek").get(
-          "enableTelemetry",
-          true
+        const updated = readTelemetryEnabled(
+          Workspace.getConfiguration("cssPeek")
         );
         setTelemetryEnabled(updated);
       }
@@ -133,11 +137,7 @@ export function activate(context: ExtensionContext): void {
       const telemetryData = {
         context: "client",
         uriAuthority: uri.authority,
-        uriFragment: uri.fragment,
-        uriPath: uri.path,
-        uriQuery: uri.query,
         uriScheme: uri.scheme,
-        workspaceFolder: null,
       };
 
       // Untitled files go to a default client.
@@ -183,7 +183,6 @@ export function activate(context: ExtensionContext): void {
       }
       // If we have nested workspace folders we only start a server on the outer most workspace folder.
       folder = getOuterMostWorkspaceFolder(folder);
-      telemetryData.workspaceFolder = folder;
 
       if (!clients.has(folder.uri.toString())) {
         Workspace.findFiles(
@@ -236,9 +235,11 @@ export function activate(context: ExtensionContext): void {
       }
       sendTelemetryEvent("Document Opened", telemetryData);
     } catch (e) {
-      sendTelemetryErrorEvent(e instanceof Error ? e.message : String(e), {
+      sendTelemetryErrorEvent("didOpenTextDocument Error", {
         context: "client",
         method: "didOpenTextDocument",
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack ?? "" : "",
       });
     }
   }
@@ -251,11 +252,7 @@ export function activate(context: ExtensionContext): void {
       if (client) {
         sendTelemetryEvent("Workspace Folder Closed", {
           context: "client",
-          folderName: folder.name,
           uriAuthority: folder.uri.authority,
-          uriFragment: folder.uri.fragment,
-          uriPath: folder.uri.path,
-          uriQuery: folder.uri.query,
           uriScheme: folder.uri.scheme,
         });
 
