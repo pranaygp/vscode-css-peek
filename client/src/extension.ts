@@ -29,6 +29,33 @@ const SUPPORTED_EXTENSION_REGEX = /\.(css|scss|less)$/;
 
 let defaultClient: LanguageClient;
 const clients: Map<string, LanguageClient> = new Map();
+// Tracks folders whose LanguageClient is mid-creation. The stylesheet read
+// step is asynchronous, so we have to claim the folder before awaiting any
+// I/O — otherwise a second matching document opened in the same folder
+// during that window would spawn a duplicate server (see #154).
+const pendingClientFolders: Set<string> = new Set();
+
+const READ_CONCURRENCY = 16;
+const utf8Decoder = new TextDecoder("utf-8");
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  );
+  return results;
+}
 
 let _sortedWorkspaceFolders: string[] | undefined;
 function sortedWorkspaceFolders(): string[] {
@@ -106,6 +133,105 @@ export function activate(context: ExtensionContext): void {
   ) as boolean;
   const respectGitignore: boolean = config.get("respectGitignore") as boolean;
 
+  const documentSelector = [
+    ...SUPPORTED_EXTENSIONS.map((language) => ({ scheme: "file", language })),
+    ...SUPPORTED_EXTENSIONS.map((language) => ({
+      scheme: "untitled",
+      language,
+    })),
+    ...peekFromLanguages.map((language) => ({ scheme: "file", language })),
+    ...peekFromLanguages.map((language) => ({ scheme: "untitled", language })),
+  ];
+
+  type Stylesheet = { uri: string; languageId: string; text: string };
+
+  async function readStylesheet(u: Uri): Promise<Stylesheet | null> {
+    try {
+      const bytes = await Workspace.fs.readFile(u);
+      return {
+        uri: u.toString(),
+        languageId: u.path.split(".").pop() || "",
+        text: utf8Decoder.decode(bytes),
+      };
+    } catch (err) {
+      sendTelemetryErrorEvent("readStylesheet", {
+        context: "client",
+        method: "readStylesheet",
+        uri: u.toString(),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
+  async function startClientForFolder(
+    folder: WorkspaceFolder,
+    folderKey: string
+  ): Promise<void> {
+    try {
+      // Discover stylesheets and read their contents via vscode.workspace.fs
+      // (works in virtual/web workspaces). Reads are capped to READ_CONCURRENCY
+      // so workspaces with thousands of files don't blow up memory at startup.
+      const gitignoreGlobs = respectGitignore
+        ? await readGitignoreGlobs(folder.uri)
+        : [];
+      const mergedExcludes = Array.from(
+        new Set([...(peekToExclude || []), ...gitignoreGlobs])
+      );
+      const file_searches = await Workspace.findFiles(
+        `{${(peekToInclude || []).join(",")}}`,
+        `{${mergedExcludes.join(",")}}`
+      );
+      const stylesheets: Stylesheet[] = (
+        await mapWithConcurrency(
+          file_searches,
+          READ_CONCURRENCY,
+          readStylesheet
+        )
+      ).filter((s): s is Stylesheet => s !== null);
+
+      // The folder may have been removed while we were reading files.
+      if (!pendingClientFolders.has(folderKey)) return;
+
+      const debugOptions = {
+        execArgv: ["--nolazy", `--inspect=${6011 + clients.size}`],
+      };
+      const serverOptions = {
+        run: { module, transport: TransportKind.ipc },
+        debug: {
+          module,
+          transport: TransportKind.ipc,
+          options: debugOptions,
+        },
+      };
+      const clientOptions: LanguageClientOptions = {
+        documentSelector,
+        diagnosticCollectionName: "css-peek",
+        synchronize: {
+          configurationSection: "cssPeek",
+        },
+        initializationOptions: {
+          stylesheets,
+          peekFromLanguages,
+          peekToLinkedOnly,
+        },
+        workspaceFolder: folder,
+        outputChannel,
+      };
+      const client = new LanguageClient(
+        "css-peek",
+        "CSS Peek",
+        serverOptions,
+        clientOptions
+      );
+      client.registerProposedFeatures();
+      client.start();
+      clients.set(folderKey, client);
+    } finally {
+      pendingClientFolders.delete(folderKey);
+    }
+  }
+
   function didOpenTextDocument(document: TextDocument): void {
     try {
       if (
@@ -115,25 +241,6 @@ export function activate(context: ExtensionContext): void {
       ) {
         return;
       }
-
-      const documentSelector = [
-        ...SUPPORTED_EXTENSIONS.map((language) => ({
-          scheme: "file",
-          language,
-        })),
-        ...SUPPORTED_EXTENSIONS.map((language) => ({
-          scheme: "untitled",
-          language,
-        })),
-        ...peekFromLanguages.map((language) => ({
-          scheme: "file",
-          language,
-        })),
-        ...peekFromLanguages.map((language) => ({
-          scheme: "untitled",
-          language,
-        })),
-      ];
 
       const uri = document.uri;
       const telemetryData = {
@@ -192,66 +299,15 @@ export function activate(context: ExtensionContext): void {
       folder = getOuterMostWorkspaceFolder(folder);
       telemetryData.workspaceFolder = folder;
 
-      if (!clients.has(folder.uri.toString())) {
-        const gitignorePromise = respectGitignore
-          ? readGitignoreGlobs(folder.uri)
-          : Promise.resolve([] as string[]);
-
-        gitignorePromise
-          .then((gitignoreGlobs) => {
-            const mergedExcludes = Array.from(
-              new Set([...(peekToExclude || []), ...gitignoreGlobs])
-            );
-            return Workspace.findFiles(
-              `{${(peekToInclude || []).join(",")}}`,
-              `{${mergedExcludes.join(",")}}`
-            );
-          })
-          .then((file_searches) => {
-            const potentialFiles: Uri[] = file_searches.filter(
-              (uri: Uri) => uri.scheme === "file"
-            );
-
-            const debugOptions = {
-              execArgv: ["--nolazy", `--inspect=${6011 + clients.size}`],
-            };
-            const serverOptions = {
-              run: { module, transport: TransportKind.ipc },
-              debug: {
-                module,
-                transport: TransportKind.ipc,
-                options: debugOptions,
-              },
-            };
-            const clientOptions: LanguageClientOptions = {
-              documentSelector,
-              diagnosticCollectionName: "css-peek",
-              synchronize: {
-                configurationSection: "cssPeek",
-              },
-              initializationOptions: {
-                stylesheets: potentialFiles.map((u) => ({
-                  uri: u.toString(),
-                  // TODO: don't rely on fsPath in a virtual workspace
-                  // https://github.com/microsoft/vscode/wiki/Virtual-Workspaces
-                  fsPath: u.fsPath,
-                })),
-                peekFromLanguages,
-                peekToLinkedOnly,
-              },
-              workspaceFolder: folder,
-              outputChannel,
-            };
-            const client = new LanguageClient(
-              "css-peek",
-              "CSS Peek",
-              serverOptions,
-              clientOptions
-            );
-            client.registerProposedFeatures();
-            client.start();
-            clients.set(folder.uri.toString(), client);
-          });
+      const folderKey = folder.uri.toString();
+      if (!clients.has(folderKey) && !pendingClientFolders.has(folderKey)) {
+        // Claim the folder synchronously before any awaits so concurrent
+        // didOpenTextDocument calls don't race to start a second server.
+        pendingClientFolders.add(folderKey);
+        startClientForFolder(folder, folderKey).catch(() => {
+          // Errors are already reported via telemetry inside startClientForFolder.
+          // The catch is just to satisfy the unhandled-rejection contract.
+        });
       }
       sendTelemetryEvent("Document Opened", telemetryData);
     } catch (e) {
@@ -266,7 +322,12 @@ export function activate(context: ExtensionContext): void {
   Workspace.textDocuments.forEach(didOpenTextDocument);
   Workspace.onDidChangeWorkspaceFolders((event) => {
     for (const folder of event.removed) {
-      const client = clients.get(folder.uri.toString());
+      const folderKey = folder.uri.toString();
+      // If the folder was still mid-spawn, drop the pending claim so the
+      // continuation in startClientForFolder bails out before constructing a
+      // client.
+      pendingClientFolders.delete(folderKey);
+      const client = clients.get(folderKey);
       if (client) {
         sendTelemetryEvent("Workspace Folder Closed", {
           context: "client",
@@ -278,7 +339,7 @@ export function activate(context: ExtensionContext): void {
           uriScheme: folder.uri.scheme,
         });
 
-        clients.delete(folder.uri.toString());
+        clients.delete(folderKey);
         client.stop();
       }
     }
