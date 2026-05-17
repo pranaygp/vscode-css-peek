@@ -172,16 +172,28 @@ export function activate(context: ExtensionContext): void {
       // Discover stylesheets and read their contents via vscode.workspace.fs
       // (works in virtual/web workspaces). Reads are capped to READ_CONCURRENCY
       // so workspaces with thousands of files don't blow up memory at startup.
-      const gitignoreGlobs = respectGitignore
-        ? await readGitignoreGlobs(folder.uri)
-        : [];
-      const mergedExcludes = Array.from(
-        new Set([...(peekToExclude || []), ...gitignoreGlobs])
-      );
-      const file_searches = await Workspace.findFiles(
-        `{${(peekToInclude || []).join(",")}}`,
-        `{${mergedExcludes.join(",")}}`
-      );
+      let file_searches: Uri[];
+      try {
+        const gitignoreGlobs = respectGitignore
+          ? await readGitignoreGlobs(folder.uri)
+          : [];
+        const mergedExcludes = Array.from(
+          new Set([...(peekToExclude || []), ...gitignoreGlobs])
+        );
+        file_searches = await Workspace.findFiles(
+          `{${(peekToInclude || []).join(",")}}`,
+          `{${mergedExcludes.join(",")}}`
+        );
+      } catch (err) {
+        // Don't crash the extension host on a transient findFiles failure;
+        // just log and let the next document-open trigger another attempt.
+        sendTelemetryErrorEvent("startClientForFolder", {
+          context: "client",
+          method: "findFiles",
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
       const stylesheets: Stylesheet[] = (
         await mapWithConcurrency(
           file_searches,
@@ -225,8 +237,22 @@ export function activate(context: ExtensionContext): void {
         clientOptions
       );
       client.registerProposedFeatures();
-      client.start();
+
+      // Register the client in `clients` BEFORE calling start() so the
+      // workspace-folder-removed handler can stop it if the folder is
+      // yanked mid-start. If start() throws, undo the registration so the
+      // folder can be retried on the next document-open.
       clients.set(folderKey, client);
+      try {
+        client.start();
+      } catch (err) {
+        clients.delete(folderKey);
+        sendTelemetryErrorEvent("startClientForFolder", {
+          context: "client",
+          method: "client.start",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     } finally {
       pendingClientFolders.delete(folderKey);
     }
