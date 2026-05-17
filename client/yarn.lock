@@ -320,6 +320,13 @@ brace-expansion@^2.0.1:
   dependencies:
     balanced-match "^1.0.0"
 
+brace-expansion@^2.0.2:
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/brace-expansion/-/brace-expansion-2.1.0.tgz#4f41a41190216ee36067ec381526fe9539c4f0ae"
+  integrity sha512-TN1kCZAgdgweJhWWpgKYrQaMNHcDULHkWwQIspdtjV4Y5aurRdZpjAqn6yX3FPqTA9ngHCc4hJxMAMgGfve85w==
+  dependencies:
+    balanced-match "^1.0.0"
+
 cls-hooked@^4.2.2:
   version "4.2.2"
   resolved "https://registry.yarnpkg.com/cls-hooked/-/cls-hooked-4.2.2.tgz#ad2e9a4092680cdaffeb2d3551da0e225eae1908"
@@ -452,6 +459,13 @@ minimatch@^5.1.0:
   integrity sha512-lKwV/1brpG6mBUFHtb7NUmtABCb2WZZmm2wNiOA5hAb8VdCS4B3dtMWyvcoViccwAW/COERjXLt0zP1zXUN26g==
   dependencies:
     brace-expansion "^2.0.1"
+
+minimatch@^9.0.3:
+  version "9.0.9"
+  resolved "https://registry.yarnpkg.com/minimatch/-/minimatch-9.0.9.tgz#9b0cb9fcb78087f6fd7eababe2511c4d3d60574e"
+  integrity sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==
+  dependencies:
+    brace-expansion "^2.0.2"
 
 module-details-from-path@^1.0.3:
   version "1.0.3"

@@ -195,6 +195,13 @@ documents.onDidClose((e) => {
   documentSettings.delete(e.document.uri);
 });
 
+function loadStylesheet(file: Stylesheet): void {
+  const document = TextDocument.create(file.uri, file.languageId, 1, file.text);
+  styleSheets[file.uri] = {
+    document,
+  };
+}
+
 function setupInitialStyleMap(params: InitializeParams) {
   const styleFiles: Stylesheet[] = params.initializationOptions.stylesheets;
 
@@ -207,18 +214,25 @@ function setupInitialStyleMap(params: InitializeParams) {
   // Stylesheet contents are read on the client (via `vscode.workspace.fs`)
   // and shipped over LSP so the server never touches the host file system.
   // This keeps the server compatible with virtual workspaces and the web build.
-  styleFiles.forEach((file) => {
-    const document = TextDocument.create(
-      file.uri,
-      file.languageId,
-      1,
-      file.text
-    );
-    styleSheets[file.uri] = {
-      document,
-    };
-  });
+  styleFiles.forEach(loadStylesheet);
 }
+
+// Keep the StylesheetMap in sync with the workspace filesystem. The client
+// pushes these notifications when a stylesheet is created or deleted on disk,
+// so peek results don't reference files that no longer exist.
+connection.onNotification("cssPeek/stylesheetDeleted", (uri: string) => {
+  connection.console.log(
+    `[Server(${process.pid})] Stylesheet deleted: ${path.basename(uri)}`
+  );
+  delete styleSheets[uri];
+});
+
+connection.onNotification("cssPeek/stylesheetCreated", (file: Stylesheet) => {
+  connection.console.log(
+    `[Server(${process.pid})] Stylesheet created: ${path.basename(file.uri)}`
+  );
+  loadStylesheet(file);
+});
 
 connection.onDefinition(
   async (
