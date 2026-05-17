@@ -29,14 +29,20 @@ export default function findSelector(
   let end = offset;
 
   // expand selection to this word specifically
+  // NOTE: `/` is intentionally not a generic boundary so Tailwind-style class
+  // names like `bg-red-500/50` (and escaped forms like `md\:flex`) are
+  // captured. The exception is the closing-tag sequence `</`: when the
+  // previous char is `/` AND the char before that is `<`, treat it as a
+  // boundary so e.g. `</div>` produces `div` (not `/div`), keeping the
+  // HTML scanner's EndTag offset aligned.
   while (
     start > 0 &&
     text.charAt(start - 1) !== " " &&
     text.charAt(start - 1) !== "'" &&
     text.charAt(start - 1) !== '"' &&
     text.charAt(start - 1) !== "\n" &&
-    text.charAt(start - 1) !== "/" &&
-    text.charAt(start - 1) !== "<"
+    text.charAt(start - 1) !== "<" &&
+    !(text.charAt(start - 1) === "/" && text.charAt(start - 2) === "<")
   )
     start -= 1;
 

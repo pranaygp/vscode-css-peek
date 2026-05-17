@@ -33,15 +33,25 @@ export function getLanguageService(document: TextDocument) {
   return service;
 }
 
-function getSelection(selector: Selector): string {
-  switch (selector.attribute) {
-    case "id":
-      return "#" + selector.value;
-    case "class":
-      return "." + selector.value;
-    default:
-      return selector.value;
+// Escape regex meta-chars in a selector value. For chars that CSS requires
+// to be backslash-escaped inside identifiers (`:` and `/`, used by Tailwind
+// for variants and arbitrary-value modifiers), accept an optional backslash
+// in the compiled stylesheet so e.g. `.md\:flex` matches the source class
+// `md:flex` from HTML. `:` and `/` are not regex meta-chars, so they are
+// emitted unescaped — important under the `u` flag, where identity escapes
+// of non-syntax chars are a SyntaxError.
+function escapeSelectorForRegex(value: string): string {
+  let out = "";
+  for (const ch of value) {
+    if (ch === ":" || ch === "/") {
+      out += "\\\\?" + ch;
+    } else if (/[.*+?^${}()|[\]\\]/.test(ch)) {
+      out += "\\" + ch;
+    } else {
+      out += ch;
+    }
   }
+  return out;
 }
 
 function resolveSymbolName(symbols: SymbolInformation[], i: number): string {
@@ -73,27 +83,46 @@ export function findSymbols(
   };
 
   // Construct RegExp of selector to test against the symbols
-  let selection = getSelection(selector);
   const classOrIdSelector =
     selector.attribute === "class" || selector.attribute === "id";
-  if (selection[0] === ".") {
-    selection = "\\" + selection;
-  }
-  if (!classOrIdSelector) {
-    // Tag selectors must have nothing, whitespace, or a combinator before it.
-    selection = "(^|[\\s>+~])" + selection;
+  const escapedValue = escapeSelectorForRegex(selector.value);
+  let selection: string;
+  switch (selector.attribute) {
+    case "id":
+      selection = "#" + escapedValue;
+      break;
+    case "class":
+      selection = "\\." + escapedValue;
+      break;
+    default:
+      // Tag selector — value is a tag name, no escaping of special CSS chars needed.
+      selection = "(^|[\\s>+~])" + escapedValue;
+      break;
   }
 
-  selection += "(\\[[^\\]]*\\]|:{1,2}[\\w-()]+|\\.[\\w-]+|#[\\w-]+)*\\s*";
+  // Suffix matcher: allow chained selectors, including class/id names that
+  // contain CSS-escaped chars like `\:` or `\/` (Tailwind) and non-ASCII
+  // identifier characters (e.g. `.foo.café`). The `u` flag enables Unicode
+  // property escapes (`\p{L}`, `\p{N}`) so identifier chars beyond ASCII
+  // `\w` are matched too.
+  const identChars = "[\\p{L}\\p{N}_\\\\:/-]";
+  // Pseudo-class chars must not place `\w` adjacent to `-` (interpreted as
+  // a range under the `u` flag). Put `-` at the end of the class instead.
+  selection +=
+    "(\\[[^\\]]*\\]|:{1,2}[\\w()-]+|\\." +
+    identChars +
+    "+|#" +
+    identChars +
+    "+)*\\s*";
 
   // This regular expression will be used to test the symbol
   const symbolRegexp = new RegExp(
     selection + "$",
-    classOrIdSelector ? "" : "i"
+    classOrIdSelector ? "u" : "iu"
   );
   // This regular expression will be used to test if file should even be parsed
   // in the first place
-  const fileRegexp = new RegExp(selection, classOrIdSelector ? "" : "i");
+  const fileRegexp = new RegExp(selection, classOrIdSelector ? "u" : "iu");
 
   // Test all the symbols against the RegExp
   Object.keys(combinedMap).forEach((uri) => {

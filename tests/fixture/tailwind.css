@@ -1,0 +1,23 @@
+.md\:flex {
+  display: flex;
+}
+
+.bg-red-500\/50 {
+  background-color: rgba(239, 68, 68, 0.5);
+}
+
+.café {
+  color: brown;
+}
+
+.style\:sm {
+  font-size: 0.875rem;
+}
+
+.foo.café {
+  color: maroon;
+}
+
+h1.café {
+  font-weight: 700;
+}
