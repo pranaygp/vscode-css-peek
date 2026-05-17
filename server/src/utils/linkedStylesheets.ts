@@ -38,16 +38,20 @@ export function findLinkedStylesheets(document: TextDocument): string[] {
   }
 
   // import './foo.css' / import "foo.scss" (also handles `import x from './foo.css'`)
+  // The negative lookahead `(?!\s*\()` skips dynamic imports like `import('./foo.css')`,
+  // which are intentionally unsupported (see the doc comment above). Optional
+  // `?query` / `#fragment` suffixes are tolerated and stripped in resolution.
   const importRe =
-    /\bimport\b[^'";]*?["']([^"']+\.(?:css|scss|sass|less))["']/gi;
+    /\bimport\b(?!\s*\()[^'";()]*?["']([^"']+\.(?:css|scss|sass|less)(?:[?#][^"']*)?)["']/gi;
   let importMatch: RegExpExecArray | null;
   while ((importMatch = importRe.exec(text)) !== null) {
     addRef(importMatch[1]);
   }
 
   // @import 'foo.css' / @import url('foo.css') / @import url(foo.css)
+  // Optional `?query` / `#fragment` suffixes are tolerated; resolution strips them.
   const atImportRe =
-    /@import\s+(?:url\(\s*)?["']?([^"')\s;]+\.(?:css|scss|sass|less))["']?\s*\)?/gi;
+    /@import\s+(?:url\(\s*)?["']?([^"')\s;]+\.(?:css|scss|sass|less)(?:[?#][^"')\s;]*)?)["']?\s*\)?/gi;
   let atImportMatch: RegExpExecArray | null;
   while ((atImportMatch = atImportRe.exec(text)) !== null) {
     addRef(atImportMatch[1]);
@@ -79,8 +83,15 @@ function resolveStylesheetUri(baseUri: string, ref: string): string | null {
     return null;
   }
 
+  // Strip query string and fragment from local refs so that cache-busted or
+  // fragment-qualified references (e.g. `./app.css?v=1`, `./icons.svg#id`)
+  // resolve to the underlying file URI, matching how the stylesheet map keys
+  // its entries.
+  const cleanRef = ref.replace(/[?#].*$/, "");
+  if (!cleanRef) return null;
+
   try {
-    return new URL(ref, baseUri).toString();
+    return new URL(cleanRef, baseUri).toString();
   } catch {
     return null;
   }

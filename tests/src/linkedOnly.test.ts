@@ -126,4 +126,27 @@ suite("findLinkedStylesheets: parsing", () => {
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs, ["file:///workspace/real.css"]);
   });
+
+  test("ignores dynamic import() expressions", () => {
+    const doc = makeDoc(
+      "file:///workspace/src/component.ts",
+      "typescript",
+      `import('./theme.css');\nawait import("./other.scss");\nimport './static.css';`
+    );
+    const refs = findLinkedStylesheets(doc);
+    assert.deepStrictEqual(refs, ["file:///workspace/src/static.css"]);
+  });
+
+  test("strips query strings and fragments from local refs", () => {
+    const doc = makeDoc(
+      "file:///workspace/src/component.ts",
+      "typescript",
+      `import './app.css?v=1';\nimport './themed.scss#dark';`
+    );
+    const refs = findLinkedStylesheets(doc);
+    assert.deepStrictEqual(refs.sort(), [
+      "file:///workspace/src/app.css",
+      "file:///workspace/src/themed.scss",
+    ]);
+  });
 });
