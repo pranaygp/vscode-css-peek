@@ -106,7 +106,13 @@
           "type": "array",
           "default": [
             "**/node_modules/**",
-            "**/bower_components/**"
+            "**/bower_components/**",
+            "**/.git/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.next/**",
+            "**/out/**",
+            "**/coverage/**"
           ],
           "items": {
             "type": "string"
@@ -118,6 +124,12 @@
           "type": "boolean",
           "default": false,
           "description": "When enabled, peek targets are restricted to stylesheets that are referenced from the current source file (e.g. via <link rel=\"stylesheet\" href=\"...\"> in HTML or `import './foo.css'` / `@import 'foo.css'` in JS/TS/SCSS). Useful in large monorepos to avoid matching unrelated stylesheets."
+        },
+        "cssPeek.respectGitignore": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, patterns from the workspace root's .gitignore are merged into cssPeek.peekToExclude so peek does not match files Git ignores. Negation (!pattern) lines and nested .gitignore files are not supported."
         },
         "cssPeek.trace.server": {
           "scope": "window",
