@@ -1,4 +1,5 @@
 import * as path from "path";
+import { minimatch } from "minimatch";
 import {
   workspace as Workspace,
   window as Window,
@@ -8,6 +9,7 @@ import {
   WorkspaceFolder,
   Uri,
   WorkspaceConfiguration,
+  FileSystemWatcher,
 } from "vscode";
 
 import {
@@ -34,6 +36,10 @@ const clients: Map<string, LanguageClient> = new Map();
 // I/O — otherwise a second matching document opened in the same folder
 // during that window would spawn a duplicate server (see #154).
 const pendingClientFolders: Set<string> = new Set();
+// One filesystem watcher per workspace folder. Disposed when the folder is
+// removed or the extension is deactivated so we don't keep firing
+// notifications at stopped LanguageClients.
+const watchers: Map<string, FileSystemWatcher> = new Map();
 
 const READ_CONCURRENCY = 16;
 const utf8Decoder = new TextDecoder("utf-8");
@@ -252,7 +258,37 @@ export function activate(context: ExtensionContext): void {
           method: "client.start",
           error: err instanceof Error ? err.message : String(err),
         });
+        return;
       }
+
+      // Watch the workspace for stylesheet add/delete events so the server's
+      // StylesheetMap stays in sync without a VSCode restart. We only handle
+      // create/delete (ignoreChangeEvents=true) because the LSP documents
+      // sync covers content edits to open files.
+      const watcher = Workspace.createFileSystemWatcher(
+        `{${(peekToInclude || []).join(",")}}`,
+        false,
+        true,
+        false
+      );
+      const isExcluded = (uri: Uri): boolean => {
+        if (uri.scheme !== "file") return true;
+        return (peekToExclude || []).some(
+          (glob) =>
+            minimatch(uri.fsPath, glob) || minimatch(uri.toString(), glob)
+        );
+      };
+      watcher.onDidDelete((uri) => {
+        if (isExcluded(uri)) return;
+        client.sendNotification("cssPeek/stylesheetDeleted", uri.toString());
+      });
+      watcher.onDidCreate(async (uri) => {
+        if (isExcluded(uri)) return;
+        const stylesheet = await readStylesheet(uri);
+        if (!stylesheet) return;
+        client.sendNotification("cssPeek/stylesheetCreated", stylesheet);
+      });
+      watchers.set(folderKey, watcher);
     } finally {
       pendingClientFolders.delete(folderKey);
     }
@@ -353,6 +389,11 @@ export function activate(context: ExtensionContext): void {
       // continuation in startClientForFolder bails out before constructing a
       // client.
       pendingClientFolders.delete(folderKey);
+      const watcher = watchers.get(folderKey);
+      if (watcher) {
+        watcher.dispose();
+        watchers.delete(folderKey);
+      }
       const client = clients.get(folderKey);
       if (client) {
         sendTelemetryEvent("Workspace Folder Closed", {
@@ -377,6 +418,10 @@ export function deactivate(): Thenable<void> {
   if (defaultClient) {
     promises.push(defaultClient.stop());
   }
+  for (const watcher of watchers.values()) {
+    watcher.dispose();
+  }
+  watchers.clear();
   for (const client of clients.values()) {
     promises.push(client.stop());
   }
