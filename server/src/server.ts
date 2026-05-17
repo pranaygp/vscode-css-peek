@@ -24,6 +24,10 @@ import {
   isLanguageServiceSupported,
 } from "./core/findDefinition";
 import { findHover } from "./core/findHover";
+import {
+  extractEmbeddedStylesheets,
+  hasEmbeddedStyles,
+} from "./core/embeddedStyles";
 import { create } from "./logger";
 
 // Creates the LSP connection
@@ -230,8 +234,16 @@ connection.onDefinition(
       return null;
     }
 
+    // For HTML/Vue source documents, also search any embedded `<style>`
+    // blocks within the same file. We parse these on-demand rather than
+    // caching, since their content is tightly coupled to the host doc.
+    const embeddedStylesheetMap = hasEmbeddedStyles(document.languageId)
+      ? extractEmbeddedStylesheets(document)
+      : {};
+
     return findDefinition(selector, styleSheets, {
       peekVariables: settings.peekVariables,
+      embeddedStylesheetMap,
     });
   }
 );
