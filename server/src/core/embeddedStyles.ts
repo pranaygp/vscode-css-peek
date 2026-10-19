@@ -7,6 +7,11 @@ import {
 
 import { StylesheetMap } from "../types";
 
+const embeddedCache = new WeakMap<
+  TextDocument,
+  { version: number; map: StylesheetMap }
+>();
+
 /**
  * Determines whether a source document may contain embedded `<style>` blocks
  * that this extension should also search for definitions.
@@ -62,11 +67,14 @@ function maskOutside(source: string, start: number, end: number): string {
  * unique per block but still tied back to the host document URI.
  */
 export function extractEmbeddedStylesheets(
-  document: TextDocument
+  document: TextDocument,
 ): StylesheetMap {
   if (!hasEmbeddedStyles(document.languageId)) {
     return {};
   }
+
+  const cached = embeddedCache.get(document);
+  if (cached?.version === document.version) return cached.map;
 
   const text = document.getText();
   const scanner: Scanner = getHTMLLanguageService().createScanner(text);
@@ -117,7 +125,7 @@ export function extractEmbeddedStylesheets(
           document.uri,
           languageId,
           document.version,
-          maskedText
+          maskedText,
         );
         result[cacheKey] = { document: embeddedDoc };
         break;
@@ -132,5 +140,6 @@ export function extractEmbeddedStylesheets(
     tokenType = scanner.scan();
   }
 
+  embeddedCache.set(document, { version: document.version, map: result });
   return result;
 }

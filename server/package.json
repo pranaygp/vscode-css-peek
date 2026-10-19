@@ -1,18 +1,19 @@
 {
-  "name": "vscode-css-peek",
+  "name": "vscode-css-peek-server",
   "description": "CSS Peek Language Server",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/pranaygp/vscode-css-peek"
   },
   "dependencies": {
-    "minimatch": "^9.0.3",
-    "vscode-css-languageservice": "^6.2.6",
-    "vscode-html-languageservice": "^5.0.6",
-    "vscode-languageserver": "^8.1.0",
-    "vscode-languageserver-textdocument": "^1.0.8"
+    "@babel/parser": "^7.29.9",
+    "minimatch": "^10.2.6",
+    "vscode-css-languageservice": "^6.3.10",
+    "vscode-html-languageservice": "^5.6.2",
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15"
   },
-  "scripts": {}
+  "private": true
 }

@@ -1,0 +1,6 @@
+.root-shared {
+  color: lime;
+}
+.nested-only {
+  display: inline;
+}

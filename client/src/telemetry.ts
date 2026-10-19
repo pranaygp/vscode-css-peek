@@ -1,4 +1,4 @@
-import TelemetryReporter from "@vscode/extension-telemetry";
+import { TelemetryReporter } from "@vscode/extension-telemetry";
 
 const INSTRUMENTATION_KEY = "7868ce95-465b-4f61-a5f9-99a12abfb3ad";
 
@@ -18,7 +18,7 @@ export function setTelemetryEnabled(enabled: boolean): void {
 export function sendTelemetryEvent(
   eventName: string,
   properties?: Record<string, string>,
-  measurements?: Record<string, number>
+  measurements?: Record<string, number>,
 ): void {
   if (!telemetryEnabled || !reporter) {
     return;
@@ -29,7 +29,7 @@ export function sendTelemetryEvent(
 export function sendTelemetryErrorEvent(
   eventName: string,
   properties?: Record<string, string>,
-  measurements?: Record<string, number>
+  measurements?: Record<string, number>,
 ): void {
   if (!telemetryEnabled || !reporter) {
     return;

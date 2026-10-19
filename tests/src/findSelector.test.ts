@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { TextDocument as ServerTextDocument } from "vscode-languageserver";
+import { TextDocument as ServerTextDocument } from "vscode-languageserver-textdocument";
 
 import findSelector from "../../server/out/core/findSelector";
 import { create } from "../../server/out/logger";
@@ -13,14 +13,14 @@ type Docs = {
 
 async function loadDocument(file: string): Promise<Docs> {
   const vscodeDoc = await vscode.workspace.openTextDocument(
-    vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+    vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file),
   );
   const text = vscodeDoc.getText();
   const serverDoc = ServerTextDocument.create(
     vscodeDoc.uri.toString(),
     vscodeDoc.languageId,
     vscodeDoc.version,
-    text
+    text,
   );
   return { vscodeDoc, serverDoc, text };
 }
@@ -51,6 +51,7 @@ suite("findSelector across fixtures", () => {
       test("finds id selector", () => {
         const p = pos(`${file.idPrefix}testID`, file.idPrefix.length);
         const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.ok(selector, "Expected a CSS selector at this position");
         assert.equal(selector.attribute, "id");
         assert.equal(selector.value, "testID");
       });
@@ -58,9 +59,10 @@ suite("findSelector across fixtures", () => {
       test("finds class selector", () => {
         const p = pos(
           `${file.classPrefix}test common`,
-          file.classPrefix.length
+          file.classPrefix.length,
         );
         const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.ok(selector, "Expected a CSS selector at this position");
         assert.equal(selector.attribute, "class");
         assert.equal(selector.value, "test");
       });
@@ -68,6 +70,7 @@ suite("findSelector across fixtures", () => {
       test("finds id selector after comment", () => {
         const p = pos(`${file.idPrefix}test-2`, file.idPrefix.length);
         const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.ok(selector, "Expected a CSS selector at this position");
         assert.equal(selector.attribute, "id");
         assert.equal(selector.value, "test-2");
       });
@@ -75,6 +78,7 @@ suite("findSelector across fixtures", () => {
       test("detects html tag", () => {
         const p = pos("<h1", 1);
         const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.ok(selector, "Expected a CSS selector at this position");
         assert.equal(selector.attribute, null);
         assert.equal(selector.value, "h1");
       });
@@ -82,10 +86,11 @@ suite("findSelector across fixtures", () => {
       test("detects html tag in closing tag (e.g. </h1>)", () => {
         const p = pos("</h1>", "</".length);
         const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+        assert.ok(selector, "Expected a CSS selector at this position");
         assert.notEqual(
           selector,
           null,
-          "expected closing-tag scan to produce a selector"
+          "expected closing-tag scan to produce a selector",
         );
         assert.equal(selector.attribute, null);
         assert.equal(selector.value, "h1");
@@ -103,12 +108,12 @@ suite("findSelector across fixtures", () => {
         const commentPos = pos("comment");
         assert.equal(
           findSelector(docs.serverDoc, commentPos, { supportTags: true }),
-          null
+          null,
         );
         const textPos = pos("heading");
         assert.equal(
           findSelector(docs.serverDoc, textPos, { supportTags: true }),
-          null
+          null,
         );
       });
     });
@@ -131,6 +136,7 @@ suite("findSelector across fixtures", () => {
     test("captures Tailwind variant `md:flex`", () => {
       const p = pos(`class="md:flex`, `class="`.length);
       const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+      assert.ok(selector, "Expected a CSS selector at this position");
       assert.equal(selector.attribute, "class");
       assert.equal(selector.value, "md:flex");
     });
@@ -139,6 +145,7 @@ suite("findSelector across fixtures", () => {
       // cursor is positioned on the `5` after the `/`
       const p = pos(`bg-red-500/50`, "bg-red-500/".length);
       const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+      assert.ok(selector, "Expected a CSS selector at this position");
       assert.equal(selector.attribute, "class");
       assert.equal(selector.value, "bg-red-500/50");
     });
@@ -146,6 +153,7 @@ suite("findSelector across fixtures", () => {
     test("captures Unicode class name `café`", () => {
       const p = pos(`class="café"`, `class="`.length);
       const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+      assert.ok(selector, "Expected a CSS selector at this position");
       assert.equal(selector.attribute, "class");
       assert.equal(selector.value, "café");
     });
@@ -153,6 +161,7 @@ suite("findSelector across fixtures", () => {
     test("captures `style:sm` (issue #150)", () => {
       const p = pos(`class="style:sm"`, `class="`.length);
       const selector = findSelector(docs.serverDoc, p, { supportTags: true });
+      assert.ok(selector, "Expected a CSS selector at this position");
       assert.equal(selector.attribute, "class");
       assert.equal(selector.value, "style:sm");
     });

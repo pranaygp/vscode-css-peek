@@ -1,4 +1,4 @@
-import { Hover, MarkupKind } from "vscode-languageserver/node";
+import { Hover, MarkupKind } from "vscode-languageserver";
 
 import { Selector, StylesheetMap } from "../types";
 import { findSymbols } from "./findDefinition";
@@ -8,7 +8,12 @@ const MAX_LINES = 20;
 export function findHover(
   selector: Selector,
   stylesheetMap: StylesheetMap,
-  options?: { peekVariables?: boolean }
+  options: {
+    peekVariables?: boolean;
+    embeddedStylesheetMap?: StylesheetMap;
+    allowedUris?: Set<string>;
+    sourceUri?: string;
+  } = {},
 ): Hover | null {
   const symbols = findSymbols(selector, stylesheetMap, options);
   if (symbols.length === 0) {
@@ -16,7 +21,13 @@ export function findHover(
   }
 
   const symbol = symbols[0];
-  const styleSheet = stylesheetMap[symbol.location.uri];
+  const styleSheet =
+    stylesheetMap[symbol.location.uri] ||
+    Object.values(options.embeddedStylesheetMap || {}).find(
+      (entry) =>
+        entry.document.uri === symbol.location.uri &&
+        entry.document.getText(symbol.location.range).trim().length > 0,
+    );
   if (!styleSheet) {
     return null;
   }

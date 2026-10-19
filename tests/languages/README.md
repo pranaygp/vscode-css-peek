@@ -1,0 +1,1 @@
+This fixture extension registers Razor and Twig language identifiers for integration tests. It has no runtime code or language features, so definition and hover assertions exercise CSS Peek itself. The test runner loads it as a second development extension; it is excluded from the published VSIX.

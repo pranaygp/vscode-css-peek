@@ -3,11 +3,15 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { TextDocument as ServerTextDocument } from "vscode-languageserver";
+import { TextDocument as ServerTextDocument } from "vscode-languageserver-textdocument";
 
 import { findDefinition } from "../../server/out/core/findDefinition";
 import { create } from "../../server/out/logger";
-import type { Stylesheet, StylesheetMap, Selector } from "../../server/src/types";
+import type {
+  Stylesheet,
+  StylesheetMap,
+  Selector,
+} from "../../server/src/types";
 
 // This test mirrors the *logic* of the cssPeek/stylesheetCreated and
 // cssPeek/stylesheetDeleted handlers (load -> confirm peek -> delete entry ->
@@ -18,7 +22,7 @@ function loadStylesheet(map: StylesheetMap, file: Stylesheet): void {
     file.uri,
     file.languageId,
     1,
-    file.text
+    file.text,
   );
   map[file.uri] = { document };
 }
@@ -57,7 +61,7 @@ suite("Stylesheet create/delete lifecycle", () => {
       assert.strictEqual(
         before.length,
         1,
-        "Expected to find the class before deletion"
+        "Expected to find the class before deletion",
       );
       assert.strictEqual(before[0].uri, uri.toString());
 
@@ -71,7 +75,7 @@ suite("Stylesheet create/delete lifecycle", () => {
       assert.strictEqual(
         after.length,
         0,
-        "Expected no results after stylesheet deletion"
+        "Expected no results after stylesheet deletion",
       );
     } finally {
       if (fs.existsSync(fsPath)) {

@@ -5,3 +5,8 @@ client/server
 tsconfig.tsbuildinfo
 .nyc_output
 .vscode-test
+dist
+*.vsix
+.vscode-test-web
+playwright-report
+test-results

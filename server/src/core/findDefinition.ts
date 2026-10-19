@@ -1,5 +1,4 @@
-import * as path from "path";
-import { Location, SymbolInformation } from "vscode-languageserver/node";
+import { Location, SymbolInformation } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   getCSSLanguageService,
@@ -26,7 +25,7 @@ export function getLanguageService(document: TextDocument) {
   let service = languageServices[document.languageId];
   if (!service) {
     console.log(
-      "Document type is " + document.languageId + ", using css instead."
+      "Document type is " + document.languageId + ", using css instead.",
     );
     service = languageServices["css"];
   }
@@ -54,12 +53,37 @@ function escapeSelectorForRegex(value: string): string {
   return out;
 }
 
-function resolveSymbolName(symbols: SymbolInformation[], i: number): string {
-  const name = symbols[i].name;
-  if (name.startsWith("&")) {
-    return resolveSymbolName(symbols, i - 1) + name.slice(1);
+const symbolNames = new WeakMap<SymbolInformation[], string[]>();
+
+function resolvedSymbolNames(symbols: SymbolInformation[]): string[] {
+  const cached = symbolNames.get(symbols);
+  if (cached) return cached;
+  const parents: number[] = [];
+  const names: string[] = [];
+  const compare = (
+    left: { line: number; character: number },
+    right: { line: number; character: number },
+  ) => left.line - right.line || left.character - right.character;
+  for (let i = 0; i < symbols.length; i++) {
+    const symbol = symbols[i];
+    while (parents.length) {
+      const parent = symbols[parents[parents.length - 1]];
+      if (
+        compare(parent.location.range.start, symbol.location.range.start) < 0 &&
+        compare(parent.location.range.end, symbol.location.range.end) >= 0
+      )
+        break;
+      parents.pop();
+    }
+    const name = symbol.name;
+    names[i] =
+      name.startsWith("&") && parents.length
+        ? names[parents[parents.length - 1]] + name.slice(1)
+        : name;
+    parents.push(i);
   }
-  return name;
+  symbolNames.set(symbols, names);
+  return names;
 }
 
 export function findSymbols(
@@ -69,23 +93,16 @@ export function findSymbols(
     peekVariables?: boolean;
     embeddedStylesheetMap?: StylesheetMap;
     allowedUris?: Set<string>;
-  } = {}
+    sourceUri?: string;
+  } = {},
 ): SymbolInformation[] {
   const {
     peekVariables = true,
     embeddedStylesheetMap = {},
     allowedUris,
+    sourceUri,
   } = options;
   const foundSymbols: SymbolInformation[] = [];
-
-  // Merge the persistent stylesheet cache with any in-memory embedded
-  // stylesheets (e.g. `<style>` blocks in HTML/Vue). The persistent cache
-  // wins on key collision; embedded entries always use fragment-suffixed
-  // keys so collisions don't happen in practice.
-  const combinedMap: StylesheetMap = {
-    ...embeddedStylesheetMap,
-    ...stylesheetMap,
-  };
 
   // Construct RegExp of selector to test against the symbols
   const classOrIdSelector =
@@ -123,72 +140,77 @@ export function findSymbols(
   // This regular expression will be used to test the symbol
   const symbolRegexp = new RegExp(
     selection + "$",
-    classOrIdSelector ? "u" : "iu"
+    classOrIdSelector ? "u" : "iu",
   );
   // This regular expression will be used to test if file should even be parsed
   // in the first place
   const fileRegexp = new RegExp(selection, classOrIdSelector ? "u" : "iu");
 
   // Test all the symbols against the RegExp
-  Object.keys(combinedMap).forEach((uri) => {
-    if (allowedUris && !allowedUris.has(uri)) {
-      return;
-    }
-    const styleSheet = combinedMap[uri];
-    try {
-      let symbols: SymbolInformation[];
-      if (styleSheet.symbols) {
-        // use the cached value
-        symbols = styleSheet.symbols;
-      } else {
-        // The document symbols haven't been extracted and cached yet.
-        // Let's first do a dumb check to see if the document even has the text we need in the first place
-        // if it doesn't, then we don't need to bother extrating and caching any symbols at all
-        const text = styleSheet.document.getText();
-        if (text.search(fileRegexp) === -1) return;
-        console.log(`Parsing ${path.basename(uri)}`);
-
-        // Looks like it does. Now, let's go ahead and actually get the symbols + cache the symbols for the future
-        const languageService = getLanguageService(styleSheet.document);
-        const stylesheet = languageService.parseStylesheet(styleSheet.document);
-        symbols = styleSheet.symbols = languageService.findDocumentSymbols(
-          styleSheet.document,
-          stylesheet
-        );
-      }
-
-      console.log(`${path.basename(uri)} has ${symbols.length} symbols`);
-      console.log(`Searching through them all for /${selection}/`);
-
-      symbols.forEach((symbol, i) => {
-        if (!peekVariables && symbol.kind === SymbolKind.Variable) {
-          return;
+  const search = (map: StylesheetMap, embedded: boolean) =>
+    Object.keys(map).forEach((uri) => {
+      const isolated = /\.(?:razor|cshtml)\.css$/i.test(uri);
+      const ownIsolated =
+        isolated && sourceUri !== undefined && uri === sourceUri + ".css";
+      if (sourceUri && isolated && !ownIsolated) return;
+      if (
+        (!embedded && allowedUris && !allowedUris.has(uri) && !ownIsolated) ||
+        (selector.moduleUri && selector.moduleUri !== uri)
+      )
+        return;
+      // Persistent entries take precedence without allocating a merged cache.
+      if (embedded && stylesheetMap[uri]) return;
+      const styleSheet = map[uri];
+      try {
+        let symbols: SymbolInformation[];
+        if (styleSheet.symbols) {
+          // use the cached value
+          symbols = styleSheet.symbols;
+        } else {
+          // Avoid parsing unrelated files. SCSS/LESS parent references can
+          // compose names absent from the source text (e.g. `.card` + `&__title`).
+          const text = styleSheet.document.getText();
+          if (
+            text.search(fileRegexp) === -1 &&
+            !(
+              classOrIdSelector &&
+              /^(?:scss|less)$/.test(styleSheet.document.languageId) &&
+              text.includes("&")
+            )
+          )
+            return;
+          const languageService = getLanguageService(styleSheet.document);
+          const stylesheet = languageService.parseStylesheet(
+            styleSheet.document,
+          );
+          symbols = styleSheet.symbols = languageService.findDocumentSymbols(
+            styleSheet.document,
+            stylesheet,
+          );
         }
-        const name = resolveSymbolName(symbols, i);
 
-        // console.log(
-        //   `  ${symbol.location.range.start.line}:${
-        //     symbol.location.range.start.character
-        //   } ${symbol.deprecated ? "[deprecated] " : " "}${
-        //     symbol.containerName ? `[container:${symbol.containerName}] ` : " "
-        //   } [${symbol.kind}] ${name}`
-        // );
-
-        if (name.search(symbolRegexp) !== -1) {
-          foundSymbols.push(symbol);
-        } else if (!classOrIdSelector) {
-          // Special case for tag selectors - match "*" as the rightmost character
-          if (/\*\s*$/.test(name)) {
-            foundSymbols.push(symbol);
+        const names = resolvedSymbolNames(symbols);
+        symbols.forEach((symbol, i) => {
+          if (!peekVariables && symbol.kind === SymbolKind.Variable) {
+            return;
           }
-        }
-      });
+          const name = names[i];
 
-      console.log(`Done`);
-    } catch (e) {
-      console.log(e.stack);
-    }
-  });
+          if (name.search(symbolRegexp) !== -1) {
+            foundSymbols.push(symbol);
+          } else if (!classOrIdSelector) {
+            // Special case for tag selectors - match "*" as the rightmost character
+            if (/\*\s*$/.test(name)) {
+              foundSymbols.push(symbol);
+            }
+          }
+        });
+      } catch (e) {
+        console.log(e instanceof Error ? e.stack || e.message : String(e));
+      }
+    });
+  search(embeddedStylesheetMap, true);
+  search(stylesheetMap, false);
 
   return foundSymbols;
 }
@@ -200,9 +222,10 @@ export function findDefinition(
     peekVariables?: boolean;
     embeddedStylesheetMap?: StylesheetMap;
     allowedUris?: Set<string>;
-  } = {}
+    sourceUri?: string;
+  } = {},
 ): Location[] {
   return findSymbols(selector, stylesheetMap, options).map(
-    ({ location }) => location
+    ({ location }) => location,
   );
 }

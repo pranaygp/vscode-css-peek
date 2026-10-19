@@ -1,0 +1,8 @@
+.csspeek-razor-isolated {
+  color: rebeccapurple;
+}
+
+.csspeek-razor-comment,
+.csspeek-razor-code {
+  color: red;
+}

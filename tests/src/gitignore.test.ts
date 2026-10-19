@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as path from "path";
 import * as vscode from "vscode";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const gitignoreMod = require("../../client/out/gitignore") as {
   gitignoreLineToGlob: (line: string) => string[];
   readGitignoreGlobs: (uri: vscode.Uri) => Promise<string[]>;
@@ -61,7 +60,7 @@ suite("gitignoreLineToGlob", () => {
 suite("readGitignoreGlobs", () => {
   test("returns empty array when .gitignore is missing", async () => {
     const tmpRoot = vscode.Uri.file(
-      path.join(__dirname, `__missing_gitignore_${Date.now()}`)
+      path.join(__dirname, `__missing_gitignore_${Date.now()}`),
     );
     const globs = await readGitignoreGlobs(tmpRoot);
     assert.deepStrictEqual(globs, []);
@@ -73,11 +72,11 @@ suite("readGitignoreGlobs", () => {
     // .gitignore in the test fixture contains `excluded.css`.
     assert.ok(
       globs.includes("**/excluded.css"),
-      `expected file glob; got ${JSON.stringify(globs)}`
+      `expected file glob; got ${JSON.stringify(globs)}`,
     );
     assert.ok(
       globs.includes("**/excluded.css/**"),
-      `expected dir glob; got ${JSON.stringify(globs)}`
+      `expected dir glob; got ${JSON.stringify(globs)}`,
     );
   });
 });

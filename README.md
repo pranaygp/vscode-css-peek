@@ -4,7 +4,7 @@
 
 # 🔍 CSS Peek
 
-This extension adds support for `Go To Definition` and `Go To Symbol in Workspace` for css/scss/less classes and IDs found in HTML/React/Vue/Svelte/Pug/ejs/etc.
+Find CSS, SCSS, and Less definitions from HTML, React JSX/TSX, Vue, Svelte, Razor, Pug, and HTML-like templates. CSS Peek runs in desktop VS Code and VS Code for the Web, including virtual workspaces. Requires VS Code 1.91 or newer.
 
 This was heavily inspired by a similar feature in [Brackets](http://brackets.io/) called CSS Inline Editors.
 
@@ -20,11 +20,28 @@ In addition, it supports the Symbol Provider so you can quickly jump to the righ
 
 ![Symbol Provider](https://github.com/pranaygp/vscode-css-peek/raw/master/readme/symbolProvider.gif)
 
+## Supported syntax
+
+- HTML-like `class` and `id` attributes, including multiline and unquoted values.
+- JSX strings, literal expressions, static branches, `clsx`/`classnames` arguments, and members of imported CSS modules. Dynamic values and CSS-in-JS runtime styles are not evaluated.
+- Pug shorthand classes and IDs and HTML-style Pug attributes.
+- Same-file `<style>` blocks in HTML and Vue, including `lang="scss"` and `lang="less"`.
+- Independent project roots in a multi-root workspace. Stylesheets from another project root are excluded.
+
+CSS Peek navigates to existing selectors; it does not generate CSS for utility classes or download remote stylesheets. Styles must exist in the opened workspace or an embedded style block.
+
+To reuse an already-open CSS editor, set VS Code's `workbench.editor.revealIfOpen` to `true`. VS Code controls editor placement and Go to Definition shortcuts.
+
 ## Configuration
 
+- `cssPeek.enable` - Enable or disable CSS Peek without reloading the window.
 - `cssPeek.supportTags` - Enable Peeking from HTML tags in addition to classnames and IDs. React components are ignored, but it's a good idea to disable this feature when using Angular.
 - `cssPeek.peekFromLanguages` - A list of vscode language names where the extension should be used.
-- `cssPeek.peekToExclude` - A list of file globs that filters out style files to not look for. By default, `node_modules` and `bower_components`
+- `cssPeek.peekToExclude` - Exclude stylesheet globs. Defaults skip dependency folders, build output, coverage, and Git internals.
+- `cssPeek.respectGitignore` - Merge the root `.gitignore` into stylesheet exclusions (default `true`). Nested ignore files and negated patterns are not supported.
+- `cssPeek.peekToLinkedOnly` - Restrict results to stylesheets directly linked or imported by the source file (default `false`). Embedded styles remain available. This does not resolve bundler aliases, package imports, or transitive imports.
+- `cssPeek.peekVariables` - Include preprocessor variable symbols (default `true`).
+- `cssPeek.trace.server` - Set to `verbose` when collecting diagnostics in Output → CSS Peek.
 - `cssPeek.enableTelemetry` - Send anonymous usage data and error reports to help improve CSS Peek. Defaults to `true`. Set to `false` to opt out.
 
 See editor docs for more details
@@ -44,104 +61,23 @@ Either setting will prevent CSS Peek from sending any telemetry events.
 
 # Contributing
 
-Contributions are greatly appreciated. Please fork the repository and submit a pull request.
+Use Node.js 24 and Yarn 1.22.22. Install with `yarn install --frozen-lockfile`, then run:
 
-# Changelog
+```sh
+yarn build
+yarn lint
+yarn prettier
+yarn test                # on Linux: xvfb-run -a yarn test
+yarn test:web            # install Chromium first: npx playwright install chromium
+yarn audit:dependencies
+yarn package
+yarn verify:package vscode-css-peek-4.5.0.vsix
+```
 
-## 4.4.0
+CI runs the desktop integration suite on Linux, macOS, and Windows with current stable VS Code, tests the minimum supported editor, exercises the browser worker, audits the lockfile, and checks the packaged VSIX. The package contains bundled runtimes and can be installed without development dependencies.
 
-- upgrade all dependncies
+See [RELEASING.md](RELEASING.md) for the release checklist, credential setup, exact CI-artifact commands, registry publishing, and issue closure. `./publish.sh [all|marketplace|open-vsx] path/to/extension.vsix` publishes the verified archive without rebuilding it, with credentials supplied by your secret manager.
 
-## 4.3.5
+## Changelog
 
-- add vscode.dev support (experimental)
-
-## 4.3.4
-
-- fix tests
-
-## 4.3.2
-
-- Improve performance by incrementally caching the stylesheets as and when needed
-
-## 4.2.0
-
-- Support VSCode Workspace Trust [#107](https://github.com/pranaygp/vscode-css-peek/issues/107)
-
-## 4.1.1
-
-- Add CodeStream Banner
-
-## 3.0.2
-
-- Use Globs for configuration options instead of RegExp via [#61](https://github.com/pranaygp/vscode-css-peek/pull/61) ❤ [@arch-stack](https://github.com/arch-stack)
-
-## 2.2.0
-
-- Initial JSX support via [#49](https://github.com/pranaygp/vscode-css-peek/pull/49) ❤ [@ReiMcCl](https://github.com/ReiMcCl)
-
-## 2.1.1
-
-- (Temporarily) fix bug [#19](https://github.com/pranaygp/vscode-css-peek/issues/18) by handling errors from `findDocumentSymbols`
-
-## 2.1.0
-
-- Add support for Symbol Provider [#18](https://github.com/pranaygp/vscode-css-peek/issues/18)
-  > ![Symbol Provider](https://github.com/pranaygp/vscode-css-peek/raw/master/readme/symbolProvider.gif)
-
-## 2.0.3
-
-- Fix bug [#14](https://github.com/pranaygp/vscode-css-peek/issues/14) that caused CSS Peek to fail after any HTML comments
-
-## 2.0.2
-
-- Fix bug that limited the language support only to HTML. Now supports all languages provided by "activeLanguages" config
-
-## 2.0.1
-
-- Fix an error wherby the Overview was missing on the Visual Studio Marketplace
-
-## 2.0.0
-
-- A complete rewrite featuring the new [Language Server Protocol](https://github.com/Microsoft/language-server-protocol)
-- Added scss support
-- Added multi definition support (provides all CSS rules matching the selector)
-- Added support for HTML tag selectors
-
-## 1.3.3
-
-- New Logo
-
-## 1.3.0
-
-- Add configuration option to ignore file from CSS lookup
-
-## 1.2.4
-
-- Crucial bug fix
-
-## 1.2.3
-
-- Workaround for bug if large number of files exist
-
-## 1.2.2
-
-- Better recognition of CSS selector word from cursor position
-- Optimize code for fewer file lookups
-
-## 1.2.1
-
-- Fix README typo
-
-## 1.2.0
-
-- Add `less` support
-- Configure search file extensions using "css_peek.searchFileExtensions"
-
-## 1.1.0
-
-- Update Icon
-
-## 1.0.0
-
-- Shamelessly copied code from [https://github.com/abierbaum/vscode-file-peek](https://github.com/abierbaum/vscode-file-peek)
+See [CHANGELOG.md](CHANGELOG.md) for release notes.

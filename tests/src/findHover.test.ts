@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { TextDocument as ServerTextDocument } from "vscode-languageserver";
+import { TextDocument as ServerTextDocument } from "vscode-languageserver-textdocument";
 
 import { findHover } from "../../server/out/core/findHover";
 import { create } from "../../server/out/logger";
@@ -10,14 +10,14 @@ async function loadStylesheets(files: string[]): Promise<StylesheetMap> {
   const map: StylesheetMap = {};
   for (const file of files) {
     const vscodeDoc = await vscode.workspace.openTextDocument(
-      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file),
     );
     const text = vscodeDoc.getText();
     const serverDoc = ServerTextDocument.create(
       vscodeDoc.uri.toString(),
       vscodeDoc.languageId,
       vscodeDoc.version,
-      text
+      text,
     );
     map[serverDoc.uri] = { document: serverDoc };
   }
@@ -41,7 +41,7 @@ suite("findHover", () => {
     assert.match(contents.value, /\n```$/);
     assert.ok(
       contents.value.includes(".test"),
-      `expected hover to include the selector body, got: ${contents.value}`
+      `expected hover to include the selector body, got: ${contents.value}`,
     );
   });
 

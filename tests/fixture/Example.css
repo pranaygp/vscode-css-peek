@@ -1,0 +1,12 @@
+.csspeek-twig-static {
+  color: royalblue;
+}
+
+#csspeek-twig-target {
+  color: slateblue;
+}
+
+.csspeek-twig-comment,
+.csspeek-twig-code {
+  color: red;
+}

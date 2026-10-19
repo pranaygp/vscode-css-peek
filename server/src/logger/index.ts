@@ -1,6 +1,6 @@
-import { RemoteConsole } from "vscode-languageserver/node";
+import type { RemoteConsole } from "vscode-languageserver";
 
-export let console: RemoteConsole = null;
-export function create(nConsole: RemoteConsole) {
-  console = nConsole;
+export let console: Pick<RemoteConsole, "log"> = { log: () => {} };
+export function create(nConsole: RemoteConsole, verbose = false) {
+  console = { log: verbose ? nConsole.log.bind(nConsole) : () => {} };
 }
