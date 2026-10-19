@@ -285,19 +285,30 @@ suite("Real extension client integration", function () {
   });
 
   test("gitignored stylesheets stay excluded when opened in the editor", async () => {
-    const document = await vscode.workspace.openTextDocument(
-      vscode.Uri.joinPath(rootA.uri, "ignored.html"),
-    );
-    await vscode.workspace.openTextDocument(
-      vscode.Uri.joinPath(rootA.uri, "ignored.css"),
-    );
-    // Synchronize with a known definition before testing the absent result.
     const source = await vscode.workspace.openTextDocument(
       vscode.Uri.joinPath(rootA.uri, "index.html"),
     );
+    // Keep the readiness document attached to an editor across client restarts.
+    // VS Code may close hidden models that were only opened programmatically.
+    await vscode.window.showTextDocument(source, { preview: false });
+    const stylesheet = await vscode.workspace.openTextDocument(
+      vscode.Uri.joinPath(rootA.uri, "ignored.css"),
+    );
+    await vscode.window.showTextDocument(stylesheet, { preview: false });
+    const document = await vscode.workspace.openTextDocument(
+      vscode.Uri.joinPath(rootA.uri, "ignored.html"),
+    );
+    await vscode.window.showTextDocument(document, { preview: false });
+    const expected = vscode.Uri.joinPath(rootA.uri, "styles.css").toString();
+    // Synchronize with a known definition before testing the absent result.
     await waitFor(
-      () => definitions(source, "root-a-only"),
-      (uris) => uris.length === 1,
+      async () => ({
+        uris: await definitions(source, "root-a-only"),
+        source: source.uri.toString(),
+        language: source.languageId,
+        closed: source.isClosed,
+      }),
+      ({ uris }) => uris.length === 1 && uris[0] === expected,
       "root A ready",
     );
     assert.deepStrictEqual(await definitions(document, "ignored-class"), []);

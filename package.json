@@ -172,6 +172,7 @@
     "test:web": "vscode-test-web --browserType chromium --quality stable --headless --extensionDevelopmentPath . --extensionTestsPath ./tests/web/suite.cjs ./tests/fixture",
     "package": "vsce package --no-dependencies",
     "verify:package": "node scripts/verify-package.mjs",
+    "test:publish": "node scripts/test-publish.mjs",
     "audit:dependencies": "node scripts/audit.mjs"
   },
   "devDependencies": {

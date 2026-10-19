@@ -76,7 +76,7 @@ yarn verify:package vscode-css-peek-4.5.0.vsix
 
 CI runs the desktop integration suite on Linux, macOS, and Windows with current stable VS Code, tests the minimum supported editor, exercises the browser worker, audits the lockfile, and checks the packaged VSIX. The package contains bundled runtimes and can be installed without development dependencies.
 
-To publish, pass the verified VSIX to `./publish.sh path/to/extension.vsix` with `VSCE_PAT` and `OVSX_PAT` supplied by your secret manager. This publishes the same archive to both registries without rebuilding it.
+See [RELEASING.md](RELEASING.md) for the release checklist, credential setup, exact CI-artifact commands, registry publishing, and issue closure. `./publish.sh [all|marketplace|open-vsx] path/to/extension.vsix` publishes the verified archive without rebuilding it, with credentials supplied by your secret manager.
 
 ## Changelog
 
