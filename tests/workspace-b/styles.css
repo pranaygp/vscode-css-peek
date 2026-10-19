@@ -1,0 +1,6 @@
+.root-shared {
+  color: blue;
+}
+.root-b-only {
+  display: grid;
+}

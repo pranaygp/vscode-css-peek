@@ -1,0 +1,26 @@
+{
+  "name": "css-peek-test-languages",
+  "displayName": "CSS Peek Test Languages",
+  "description": "Registers language identifiers used by CSS Peek's integration fixtures.",
+  "publisher": "css-peek-tests",
+  "version": "0.0.0",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "aspnetcorerazor",
+        "extensions": [
+          ".razor"
+        ]
+      },
+      {
+        "id": "twig",
+        "extensions": [
+          ".twig"
+        ]
+      }
+    ]
+  }
+}

@@ -5,7 +5,7 @@
   "author": "Pranay Prakash <pranay.gp@gmail.com>",
   "icon": "css_peek_icon.png",
   "license": "MIT",
-  "version": "4.4.3",
+  "version": "4.5.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/pranaygp/vscode-css-peek"
@@ -30,20 +30,18 @@
     "workspace symbol"
   ],
   "engines": {
-    "vscode": "^1.37.0"
+    "vscode": "^1.91.0",
+    "node": ">=22.18.0"
   },
-  "main": "./client/out/extension",
-  "browser": "./client/out/extension",
+  "main": "./dist/extension.js",
+  "browser": "./dist/extension-browser.js",
   "publisher": "pranaygp",
   "bugs": {
     "url": "https://github.com/pranaygp/vscode-css-peek/issues"
   },
   "homepage": "https://github.com/pranaygp/vscode-css-peek/blob/master/README.md",
   "activationEvents": [
-    "workspaceContains:**/*.css",
-    "workspaceContains:**/*.scss",
-    "workspaceContains:**/*.sass",
-    "workspaceContains:**/*.less"
+    "onStartupFinished"
   ],
   "contributes": {
     "configuration": {
@@ -94,7 +92,9 @@
             "html-eex",
             "ejs",
             "hbs",
-            "svelte"
+            "svelte",
+            "aspnetcorerazor",
+            "cshtml"
           ],
           "items": {
             "type": "string"
@@ -156,31 +156,51 @@
       "supported": true
     },
     "virtualWorkspaces": {
-      "supported": false,
-      "description": "The server no longer touches the host filesystem, but the client's documentSelector still gates on the `file` and `untitled` URI schemes. Expanding the selector to cover virtual schemes (e.g. `vscode-vfs`) is a separate change."
+      "supported": true
     }
   },
   "scripts": {
-    "vscode:prepublish": "yarn run clean && yarn build",
-    "clean": "rm -rf ./client/out ./server/out ./tests/out",
-    "build": "tsc -b",
-    "prettier": "prettier './{server,client,tests}/**/*' -c",
-    "lint": "yarn run eslint . --ext ts",
+    "vscode:prepublish": "yarn clean && yarn build",
+    "clean": "node scripts/clean.mjs",
+    "build": "yarn compile && yarn bundle",
+    "compile": "tsc -b",
+    "bundle": "node scripts/build.mjs",
+    "prettier": "prettier \"{server,client,tests}/src/**/*.ts\" --check",
+    "lint": "eslint .",
     "watch": "tsc -b -w",
-    "test": "vscode-test",
-    "postinstall": "cd client && yarn && cd ../server && yarn && cd ../tests && yarn && cd .."
+    "test": "vscode-test --fail-zero --forbid-only",
+    "test:web": "vscode-test-web --browserType chromium --quality stable --headless --extensionDevelopmentPath . --extensionTestsPath ./tests/web/suite.cjs ./tests/fixture",
+    "package": "vsce package --no-dependencies",
+    "verify:package": "node scripts/verify-package.mjs",
+    "audit:dependencies": "node scripts/audit.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^14.0.24",
-    "@typescript-eslint/eslint-plugin": "^5.61.0",
-    "@typescript-eslint/parser": "^5.61.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2",
-    "eslint": "^7.5.0",
-    "mocha": "^10.0.10",
-    "prettier": "^2.0.5",
-    "typescript": "^5.1.6"
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.91.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^4.0.0",
+    "@yarnpkg/lockfile": "^1.1.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.13.0",
+    "mocha": "^12.0.3",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "yauzl": "^3.4.0"
   },
-  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "tests"
+  ],
+  "resolutions": {
+    "**/mocha/serialize-javascript": "^7.1.2",
+    "**/mocha/diff": "^8.0.4"
+  }
 }

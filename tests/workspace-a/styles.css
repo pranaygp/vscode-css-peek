@@ -1,0 +1,6 @@
+.root-shared {
+  color: red;
+}
+.root-a-only {
+  display: flex;
+}

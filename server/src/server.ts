@@ -1,18 +1,15 @@
 "use strict";
 
-import { minimatch } from "minimatch";
-import * as path from "path";
 import {
-  createConnection,
+  Connection,
   TextDocuments,
-  ProposedFeatures,
   TextDocumentSyncKind,
   TextDocumentPositionParams,
   Definition,
   Hover,
   InitializeParams,
   DidChangeConfigurationNotification,
-} from "vscode-languageserver/node";
+} from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { Stylesheet, StylesheetMap, Selector } from "./types";
 
@@ -28,307 +25,337 @@ import {
   hasEmbeddedStyles,
 } from "./core/embeddedStyles";
 import { findLinkedStylesheets } from "./utils/linkedStylesheets";
+import { isStylesheetInScope, workspaceRootUri } from "./utils/stylesheetScope";
 import { create } from "./logger";
 
-// Creates the LSP connection
-const connection = createConnection(ProposedFeatures.all);
+export function startServer(connection: Connection): void {
+  const label = (uri: string | null | undefined) =>
+    (uri || "untitled").split("/").pop() || "workspace";
 
-// Create a manager for open text documents
-const documents = new TextDocuments(TextDocument);
+  // Create a manager for open text documents
+  const documents = new TextDocuments(TextDocument);
 
-// Create a map of styleSheet URIs to the stylesheet text content
-// NOTE: this is a really bad cache in practice. Large files will occupy tons of memory without being reused
-// We should use an in-memory javascript database of some sort with a basic cache invalidation strategy
-// like LRU, an implement some sort of memory cap
-const styleSheets: StylesheetMap = {};
+  // Keep only stylesheet text and lazily populated symbol arrays. Parsed CSS
+  // syntax trees are released after symbol extraction; file events invalidate
+  // each entry rather than retaining old document versions.
+  const styleSheets: StylesheetMap = {};
 
-// The workspace folder this server is operating on
-let workspaceFolder: string | null;
+  // The workspace folder this server is operating on
+  let workspaceFolder: string | null;
+  let initialExcludes: string[] = [];
 
-let hasConfigurationCapability = false;
-let hasWorkspaceFolderCapability = false;
+  let hasConfigurationCapability = false;
+  let hasWorkspaceFolderCapability = false;
 
-async function isValidPeekTarget(document: TextDocument) {
-  const settings = await getDocumentSettings(document.uri);
-  return !settings.peekToExclude.find((glob) => minimatch(document.uri, glob));
-}
-
-async function isValidPeekSource(document: TextDocument) {
-  const settings = await getDocumentSettings(document.uri);
-  return settings.peekFromLanguages.includes(document.languageId);
-}
-
-/* Handle Document Updates */
-documents.onDidOpen(async (event) => {
-  if (!(await isValidPeekTarget(event.document))) {
-    return;
+  async function isValidPeekTarget(document: TextDocument) {
+    const settings = await getDocumentSettings(document.uri);
+    return isStylesheetInScope(document.uri, workspaceFolder, [
+      ...initialExcludes,
+      ...settings.peekToExclude,
+    ]);
   }
 
-  if (isLanguageServiceSupported(event.document.languageId)) {
-    connection.console.log(
-      `[Server(${process.pid}) ${path.basename(
-        workspaceFolder
-      )}/] Document opened: ${path.basename(event.document.uri)}.`
+  async function isValidPeekSource(document: TextDocument | undefined) {
+    if (!document) return false;
+    const settings = await getDocumentSettings(document.uri);
+    return (
+      settings.enable &&
+      settings.peekFromLanguages.includes(document.languageId)
     );
-    styleSheets[event.document.uri] = {
-      document: event.document,
-    };
-  }
-});
-documents.onDidChangeContent(async (event) => {
-  if (!(await isValidPeekTarget(event.document))) {
-    return;
   }
 
-  if (isLanguageServiceSupported(event.document.languageId)) {
+  /* Handle Document Updates */
+  documents.onDidOpen(async (event) => {
+    if (!(await isValidPeekTarget(event.document))) {
+      return;
+    }
+
+    if (isLanguageServiceSupported(event.document.languageId)) {
+      connection.console.log(
+        `[Server(${"CSS Peek"}) ${label(workspaceFolder)}/] Document opened: ${label(event.document.uri)}.`,
+      );
+      styleSheets[event.document.uri] = {
+        document: event.document,
+      };
+    }
+  });
+  documents.onDidChangeContent(async (event) => {
+    if (!(await isValidPeekTarget(event.document))) {
+      return;
+    }
+
+    if (isLanguageServiceSupported(event.document.languageId)) {
+      connection.console.log(
+        `[Server(${"CSS Peek"}) ${label(workspaceFolder)}/] Document changed: ${label(event.document.uri)}. Invalidating Cache.`,
+      );
+      styleSheets[event.document.uri] = {
+        document: event.document,
+      };
+    }
+  });
+  documents.listen(connection);
+
+  /* Server Initialization */
+  connection.onInitialize((params) => {
+    create(connection.console, params.trace === "verbose");
+    const capabilities = params.capabilities;
+
+    workspaceFolder = workspaceRootUri(params);
+    initialExcludes = params.initializationOptions?.peekToExclude || [];
+    // Does the client support the `workspace/configuration` request?
+    // If not, we will fall back using global settings
+    hasConfigurationCapability = !!capabilities.workspace?.configuration;
+    hasWorkspaceFolderCapability = !!capabilities.workspace?.workspaceFolders;
+
     connection.console.log(
-      `[Server(${process.pid}) ${path.basename(
-        workspaceFolder
-      )}/] Document changed: ${path.basename(
-        event.document.uri
-      )}. Invalidating Cache.`
+      `[Server(${"CSS Peek"}) ${label(workspaceFolder)}/] onInitialize`,
     );
-    styleSheets[event.document.uri] = {
-      document: event.document,
-    };
-  }
-});
-documents.listen(connection);
+    setupInitialStyleMap(params);
+    connection.console.log(
+      `[Server(${"CSS Peek"}) ${label(workspaceFolder)}/] setupInitialStylemap`,
+    );
 
-/* Server Initialization */
-connection.onInitialize((params) => {
-  create(connection.console);
-  const capabilities = params.capabilities;
-
-  workspaceFolder = params.rootUri;
-  // Does the client support the `workspace/configuration` request?
-  // If not, we will fall back using global settings
-  hasConfigurationCapability =
-    capabilities.workspace && !!capabilities.workspace.configuration;
-  hasWorkspaceFolderCapability =
-    capabilities.workspace && !!capabilities.workspace.workspaceFolders;
-
-  connection.console.log(
-    `[Server(${process.pid}) ${path.basename(workspaceFolder)}/] onInitialize`
-  );
-  setupInitialStyleMap(params);
-  connection.console.log(
-    `[Server(${process.pid}) ${path.basename(
-      workspaceFolder
-    )}/] setupInitialStylemap`
-  );
-
-  return {
-    capabilities: {
-      textDocumentSync: {
-        openClose: true,
-        change: TextDocumentSyncKind.Full,
+    return {
+      capabilities: {
+        textDocumentSync: {
+          openClose: true,
+          change: TextDocumentSyncKind.Incremental,
+        },
+        definitionProvider: true,
+        hoverProvider: true,
+        workspaceSymbolProvider: true,
       },
-      definitionProvider: true,
-      hoverProvider: true,
-      workspaceSymbolProvider: true,
-    },
-  };
-});
+    };
+  });
 
-/* Sync Configuration Settings */
-interface Settings {
-  supportTags: boolean;
-  peekVariables: boolean;
-  peekFromLanguages: string[];
-  peekToExclude: string[];
-  peekToLinkedOnly: boolean;
-}
-connection.onInitialized(() => {
-  if (hasConfigurationCapability) {
-    // Register for all configuration changes.
-    connection.client.register(
-      DidChangeConfigurationNotification.type,
-      undefined
+  /* Sync Configuration Settings */
+  interface Settings {
+    enable: boolean;
+    supportTags: boolean;
+    peekVariables: boolean;
+    peekFromLanguages: string[];
+    peekToExclude: string[];
+    peekToLinkedOnly: boolean;
+  }
+  connection.onInitialized(() => {
+    if (hasConfigurationCapability) {
+      // Register for all configuration changes.
+      connection.client.register(
+        DidChangeConfigurationNotification.type,
+        undefined,
+      );
+    }
+    if (hasWorkspaceFolderCapability) {
+      connection.workspace.onDidChangeWorkspaceFolders((_event) => {
+        connection.console.log("Workspace folder change event received.");
+      });
+    }
+  });
+  // The global settings, used when the `workspace/configuration` request is not supported by the client.
+  const defaultSettings: Settings = {
+    enable: true,
+    supportTags: true,
+    peekVariables: true,
+    peekFromLanguages: ["html"],
+    peekToExclude: ["**/node_modules/**", "**/bower_components/**"],
+    peekToLinkedOnly: false,
+  };
+  let globalSettings: Settings = defaultSettings;
+
+  // Cache the settings of all open documents
+  const documentSettings: Map<string, Thenable<Settings>> = new Map();
+
+  connection.onDidChangeConfiguration((change) => {
+    if (hasConfigurationCapability) {
+      // Reset all cached document settings
+      documentSettings.clear();
+    } else {
+      globalSettings = { ...defaultSettings, ...change.settings?.cssPeek };
+    }
+  });
+
+  function getDocumentSettings(resource: string): Thenable<Settings> {
+    if (!hasConfigurationCapability) {
+      return Promise.resolve(globalSettings);
+    }
+    let result = documentSettings.get(resource);
+    if (!result) {
+      result = connection.workspace
+        .getConfiguration({
+          scopeUri: resource,
+          section: "cssPeek",
+        })
+        .then((settings) => ({ ...defaultSettings, ...settings }));
+      documentSettings.set(resource, result);
+    }
+    return result;
+  }
+
+  // Only keep settings for open documents
+  documents.onDidClose((e) => {
+    documentSettings.delete(e.document.uri);
+  });
+
+  function loadStylesheet(file: Stylesheet): void {
+    const document = TextDocument.create(
+      file.uri,
+      file.languageId,
+      1,
+      file.text,
     );
+    styleSheets[file.uri] = {
+      document,
+    };
   }
-  if (hasWorkspaceFolderCapability) {
-    connection.workspace.onDidChangeWorkspaceFolders((_event) => {
-      connection.console.log("Workspace folder change event received.");
-    });
+
+  function setupInitialStyleMap(params: InitializeParams) {
+    const styleFiles: Stylesheet[] =
+      params.initializationOptions?.stylesheets || [];
+
+    connection.console.log(
+      `[Server(${"CSS Peek"}) ${label(workspaceFolder)}/] Number of style sheets - ${styleFiles.length}`,
+    );
+
+    // Stylesheet contents are read on the client (via `vscode.workspace.fs`)
+    // and shipped over LSP so the server never touches the host file system.
+    // This keeps the server compatible with virtual workspaces and the web build.
+    styleFiles.forEach(loadStylesheet);
   }
-});
-// The global settings, used when the `workspace/configuration` request is not supported by the client.
-const defaultSettings: Settings = {
-  supportTags: true,
-  peekVariables: true,
-  peekFromLanguages: ["html"],
-  peekToExclude: ["**/node_modules/**", "**/bower_components/**"],
-  peekToLinkedOnly: false,
-};
-let globalSettings: Settings = defaultSettings;
 
-// Cache the settings of all open documents
-const documentSettings: Map<string, Thenable<Settings>> = new Map();
+  // Keep the StylesheetMap in sync with the workspace filesystem. The client
+  // pushes these notifications when a stylesheet is created or deleted on disk,
+  // so peek results don't reference files that no longer exist.
+  connection.onNotification("cssPeek/stylesheetDeleted", (uri: string) => {
+    connection.console.log(
+      `[Server(${"CSS Peek"})] Stylesheet deleted: ${label(uri)}`,
+    );
+    delete styleSheets[uri];
+  });
 
-connection.onDidChangeConfiguration((change) => {
-  if (hasConfigurationCapability) {
-    // Reset all cached document settings
-    documentSettings.clear();
-  } else {
-    globalSettings = <Settings>(change.settings.cssPeek || defaultSettings);
-  }
-});
+  connection.onNotification("cssPeek/stylesheetCreated", (file: Stylesheet) => {
+    connection.console.log(
+      `[Server(${"CSS Peek"})] Stylesheet created: ${label(file.uri)}`,
+    );
+    loadStylesheet(file);
+  });
 
-function getDocumentSettings(resource: string): Thenable<Settings> {
-  if (!hasConfigurationCapability) {
-    return Promise.resolve(globalSettings);
-  }
-  let result = documentSettings.get(resource);
-  if (!result) {
-    result = connection.workspace.getConfiguration({
-      scopeUri: resource,
-      section: "cssPeek",
-    });
-    documentSettings.set(resource, result);
-  }
-  return result;
-}
+  connection.onNotification("cssPeek/stylesheetChanged", (file: Stylesheet) => {
+    // An open editor's LSP text includes unsaved edits and must win over disk.
+    if (!documents.get(file.uri)) loadStylesheet(file);
+  });
 
-// Only keep settings for open documents
-documents.onDidClose((e) => {
-  documentSettings.delete(e.document.uri);
-});
+  connection.onNotification("cssPeek/stylesheetClosed", (file: Stylesheet) => {
+    // The client reads disk only after the LSP didClose was delivered.
+    // A new editor may have reopened it while that asynchronous read ran.
+    if (!documents.get(file.uri)) loadStylesheet(file);
+  });
 
-function loadStylesheet(file: Stylesheet): void {
-  const document = TextDocument.create(file.uri, file.languageId, 1, file.text);
-  styleSheets[file.uri] = {
-    document,
-  };
-}
+  connection.onDefinition(
+    async (
+      textDocumentPositon: TextDocumentPositionParams,
+    ): Promise<Definition | null> => {
+      const documentIdentifier = textDocumentPositon.textDocument;
+      const position = textDocumentPositon.position;
 
-function setupInitialStyleMap(params: InitializeParams) {
-  const styleFiles: Stylesheet[] = params.initializationOptions.stylesheets;
+      const document = documents.get(documentIdentifier.uri);
 
-  connection.console.log(
-    `[Server(${process.pid}) ${path.basename(
-      workspaceFolder
-    )}/] Number of style sheets - ${styleFiles.length}`
+      if (!document || !(await isValidPeekSource(document))) {
+        return null;
+      }
+      const settings = await getDocumentSettings(document.uri);
+
+      const selector = findSelector(document, position, settings);
+      if (!selector) {
+        return null;
+      }
+
+      // For HTML/Vue source documents, also search any embedded `<style>`
+      // blocks within the same file. We parse these on-demand rather than
+      // caching, since their content is tightly coupled to the host doc.
+      const embeddedStylesheetMap = hasEmbeddedStyles(document.languageId)
+        ? extractEmbeddedStylesheets(document)
+        : {};
+
+      const allowedUris = settings.peekToLinkedOnly
+        ? new Set(findLinkedStylesheets(document))
+        : undefined;
+
+      return findDefinition(selector, styleSheets, {
+        sourceUri: document.uri,
+        peekVariables: settings.peekVariables,
+        embeddedStylesheetMap,
+        allowedUris,
+      });
+    },
   );
 
-  // Stylesheet contents are read on the client (via `vscode.workspace.fs`)
-  // and shipped over LSP so the server never touches the host file system.
-  // This keeps the server compatible with virtual workspaces and the web build.
-  styleFiles.forEach(loadStylesheet);
-}
+  connection.onHover(
+    async (
+      textDocumentPositon: TextDocumentPositionParams,
+    ): Promise<Hover | null> => {
+      const documentIdentifier = textDocumentPositon.textDocument;
+      const position = textDocumentPositon.position;
 
-// Keep the StylesheetMap in sync with the workspace filesystem. The client
-// pushes these notifications when a stylesheet is created or deleted on disk,
-// so peek results don't reference files that no longer exist.
-connection.onNotification("cssPeek/stylesheetDeleted", (uri: string) => {
-  connection.console.log(
-    `[Server(${process.pid})] Stylesheet deleted: ${path.basename(uri)}`
+      const document = documents.get(documentIdentifier.uri);
+
+      if (!document || !(await isValidPeekSource(document))) {
+        return null;
+      }
+      const settings = await getDocumentSettings(document.uri);
+
+      const selector = findSelector(document, position, settings);
+      if (!selector) {
+        return null;
+      }
+
+      return findHover(selector, styleSheets, {
+        sourceUri: document.uri,
+        peekVariables: settings.peekVariables,
+        embeddedStylesheetMap: hasEmbeddedStyles(document.languageId)
+          ? extractEmbeddedStylesheets(document)
+          : {},
+        allowedUris: settings.peekToLinkedOnly
+          ? new Set(findLinkedStylesheets(document))
+          : undefined,
+      });
+    },
   );
-  delete styleSheets[uri];
-});
 
-connection.onNotification("cssPeek/stylesheetCreated", (file: Stylesheet) => {
-  connection.console.log(
-    `[Server(${process.pid})] Stylesheet created: ${path.basename(file.uri)}`
-  );
-  loadStylesheet(file);
-});
+  connection.onWorkspaceSymbol(async ({ query }) => {
+    if (query.length < 2) return [];
+    const selectors: Selector[] = [
+      {
+        attribute: "class",
+        value: query,
+      },
+      {
+        attribute: "id",
+        value: query,
+      },
+      {
+        attribute: "tag",
+        value: query,
+      },
+    ];
 
-connection.onDefinition(
-  async (
-    textDocumentPositon: TextDocumentPositionParams
-  ): Promise<Definition> => {
-    const documentIdentifier = textDocumentPositon.textDocument;
-    const position = textDocumentPositon.position;
+    const settings: Settings = hasConfigurationCapability
+      ? {
+          ...defaultSettings,
+          ...(await connection.workspace.getConfiguration({
+            scopeUri: workspaceFolder || undefined,
+            section: "cssPeek",
+          })),
+        }
+      : globalSettings;
 
-    const document = documents.get(documentIdentifier.uri);
+    if (!settings.enable) return [];
 
-    if (!(await isValidPeekSource(document))) {
-      return null;
-    }
-    const settings = await getDocumentSettings(document.uri);
-
-    const selector: Selector = findSelector(document, position, settings);
-    if (!selector) {
-      return null;
-    }
-
-    // For HTML/Vue source documents, also search any embedded `<style>`
-    // blocks within the same file. We parse these on-demand rather than
-    // caching, since their content is tightly coupled to the host doc.
-    const embeddedStylesheetMap = hasEmbeddedStyles(document.languageId)
-      ? extractEmbeddedStylesheets(document)
-      : {};
-
-    const allowedUris = settings.peekToLinkedOnly
-      ? new Set(findLinkedStylesheets(document))
-      : undefined;
-
-    return findDefinition(selector, styleSheets, {
-      peekVariables: settings.peekVariables,
-      embeddedStylesheetMap,
-      allowedUris,
-    });
-  }
-);
-
-connection.onHover(
-  async (
-    textDocumentPositon: TextDocumentPositionParams
-  ): Promise<Hover | null> => {
-    const documentIdentifier = textDocumentPositon.textDocument;
-    const position = textDocumentPositon.position;
-
-    const document = documents.get(documentIdentifier.uri);
-
-    if (!document || !(await isValidPeekSource(document))) {
-      return null;
-    }
-    const settings = await getDocumentSettings(document.uri);
-
-    const selector: Selector = findSelector(document, position, settings);
-    if (!selector) {
-      return null;
-    }
-
-    return findHover(selector, styleSheets, {
-      peekVariables: settings.peekVariables,
-    });
-  }
-);
-
-connection.onWorkspaceSymbol(async ({ query }) => {
-  if (query.length < 2) return [];
-  const selectors: Selector[] = [
-    {
-      attribute: "class",
-      value: query,
-    },
-    {
-      attribute: "id",
-      value: query,
-    },
-    {
-      attribute: "tag",
-      value: query,
-    },
-  ];
-
-  const settings = hasConfigurationCapability
-    ? ((await connection.workspace.getConfiguration({
-        section: "cssPeek",
-      })) as Settings) || defaultSettings
-    : globalSettings;
-
-  return selectors.reduce(
-    (p, selector) => [
-      ...p,
-      ...findSymbols(selector, styleSheets, {
+    return selectors.flatMap((selector) =>
+      findSymbols(selector, styleSheets, {
         peekVariables: settings.peekVariables,
       }),
-    ],
-    []
-  );
-});
+    );
+  });
 
-connection.listen();
+  connection.listen();
+}

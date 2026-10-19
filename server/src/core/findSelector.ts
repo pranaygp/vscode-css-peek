@@ -1,154 +1,136 @@
 import { Position } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import {
-  Scanner,
-  getLanguageService as getHTMLLanguageService,
-  TokenType,
-} from "vscode-html-languageservice";
+import { Selector } from "../types";
+import { findJSXSelector } from "./jsxSelectors";
+import { findPugSelector } from "./pugSelectors";
+import { findHTMLSelector, htmlSelectorRanges } from "./htmlSelectors";
 
-import { console } from "./../logger";
-/**
- * Find the selector given the document and the current cursor position.
- * This is found by iterating forwards and backwards from the position to find a valid CSS class/id
- *
- * @param {vscode.TextDocument} document - The Document to check
- * @param {vscode.Position} position - The current cursor position
- * @returns {{attribute: string, value: string}} The valid CSS selector
- *
- * @memberOf PeekFileDefinitionProvider
- */
+const javascriptLanguages = new Set([
+  "javascript",
+  "typescript",
+  "javascriptreact",
+  "typescriptreact",
+]);
+const razorLanguages = new Set(["razor", "aspnetcorerazor", "cshtml"]);
+
+/** Find a literal class/id or native tag at the cursor, using its host syntax. */
 export default function findSelector(
   document: TextDocument,
   position: Position,
-  settings: { supportTags: boolean }
-): { attribute: string; value: string } {
-  const text = document.getText();
+  settings: { supportTags: boolean },
+): Selector | null {
   const offset = document.offsetAt(position);
+  if (javascriptLanguages.has(document.languageId))
+    return findJSXSelector(document, offset, settings.supportTags);
+  if (document.languageId === "pug" || document.languageId === "jade")
+    return findPugSelector(document, offset, settings.supportTags);
 
-  let start = offset;
-  let end = offset;
+  const source = document.getText();
+  if (document.languageId === "twig")
+    return findTwigSelector(source, offset, settings.supportTags);
+  const text = razorLanguages.has(document.languageId)
+    ? maskRazorCode(source)
+    : source;
+  return findHTMLSelector(text, offset, settings.supportTags);
+}
 
-  // expand selection to this word specifically
-  // NOTE: `/` is intentionally not a generic boundary so Tailwind-style class
-  // names like `bg-red-500/50` (and escaped forms like `md\:flex`) are
-  // captured. The exception is the closing-tag sequence `</`: when the
-  // previous char is `/` AND the char before that is `<`, treat it as a
-  // boundary so e.g. `</div>` produces `div` (not `/div`), keeping the
-  // HTML scanner's EndTag offset aligned.
-  while (
-    start > 0 &&
-    text.charAt(start - 1) !== " " &&
-    text.charAt(start - 1) !== "'" &&
-    text.charAt(start - 1) !== '"' &&
-    text.charAt(start - 1) !== "\n" &&
-    text.charAt(start - 1) !== "<" &&
-    !(text.charAt(start - 1) === "/" && text.charAt(start - 2) === "<")
-  )
-    start -= 1;
-
-  while (
-    end < text.length &&
-    text.charAt(end) !== " " &&
-    text.charAt(end) !== "'" &&
-    text.charAt(end) !== '"' &&
-    text.charAt(end) !== "\n" &&
-    text.charAt(end) !== ">"
-  )
-    end += 1;
-  const selectorWord = text.slice(start, end);
-
-  let selector = null;
-  const htmlScanner: Scanner = getHTMLLanguageService().createScanner(text);
-  let attribute: string = null;
-
-  // FOR DEBUGGING
-  // console.log(`${selectorWord} ${start}`);
-  let tokenType = htmlScanner.scan();
-  while (tokenType !== TokenType.EOS) {
-    switch (tokenType) {
-      case TokenType.StartTag:
-      case TokenType.EndTag: {
-        attribute = null;
-
-        if (!settings.supportTags) {
-          break;
-        }
-
-        // FOR DEBUGGING
-        // console.log(
-        //   `  ${htmlScanner.getTokenText()} ${htmlScanner.getTokenOffset()} ${htmlScanner.getTokenEnd()}`
-        // );
-        const tokenOffset = htmlScanner.getTokenOffset();
-
-        if (
-          [
-            "javascript",
-            "typescript",
-            "javascriptreact",
-            "typescriptreact",
-          ].includes(document.languageId)
-        ) {
-          if (
-            selectorWord[0] &&
-            selectorWord[0].toUpperCase() === selectorWord[0]
-          ) {
-            // if the first letter is uppercase, this is a JSX component
-            break;
-          }
-        }
-
-        if (start === tokenOffset)
-          selector = { attribute: null, value: selectorWord };
+/** Hide Twig code/comments while keeping literal surrounding markup usable. */
+function findTwigSelector(
+  source: string,
+  offset: number,
+  supportTags: boolean,
+): Selector | null {
+  const pieces: string[] = [];
+  const openings = /\{[{%#]/g;
+  const marker = "\uE000";
+  let previousEnd = 0;
+  for (
+    let match = openings.exec(source);
+    match;
+    match = openings.exec(source)
+  ) {
+    const opening = match[0];
+    const closing = opening === "{{" ? "}}" : opening === "{%" ? "%}" : "#}";
+    let end = openings.lastIndex;
+    let quote = "";
+    while (end < source.length) {
+      const character = source[end]!;
+      if (quote) {
+        if (character === "\\") end++;
+        else if (character === quote) quote = "";
+      } else if (source.startsWith(closing, end)) {
+        end += closing.length;
         break;
-      }
-      case TokenType.AttributeName:
-        attribute = htmlScanner.getTokenText().toLowerCase();
+      } else if (opening !== "{#" && (character === '"' || character === "'"))
+        quote = character;
+      end++;
+    }
+    pieces.push(
+      source.slice(previousEnd, match.index),
+      source
+        .slice(match.index, end)
+        .replace(/[^\r\n]/g, opening === "{{" ? marker : " "),
+    );
+    previousEnd = end;
+    openings.lastIndex = end;
+  }
+  const markup = pieces.length
+    ? pieces.join("") + source.slice(previousEnd)
+    : source;
+  for (const range of htmlSelectorRanges(markup)) {
+    if (range.start > offset) break;
+    if (
+      offset <= range.end &&
+      !range.selector.value.includes(marker) &&
+      (range.selector.attribute !== null || supportTags)
+    )
+      return range.selector;
+  }
+  return null;
+}
 
-        // Convert the attribute to a standard class attribute
-        if (attribute === "classname") {
-          attribute = "class";
-        }
-
-        break;
-      case TokenType.AttributeValue:
-        // FOR DEBUGGING
-        // console.log(
-        //   `${htmlScanner.getTokenText()} ${htmlScanner.getTokenOffset()} ${htmlScanner.getTokenEnd()}`
-        // );
-        if (attribute === "class" || attribute === "id") {
-          const values = htmlScanner.getTokenText().slice(1, -1).split(" ");
-
-          // calculate startOffsets for each class/id in this attribute
-          // +1 because we sliced earlier, so the first offset is the offset + 1
-          let startOffset = htmlScanner.getTokenOffset() + 1;
-          const offsets = values.map((v) => {
-            const o = startOffset;
-            startOffset += v.length + 1; // add 1 for the space
-            return o;
-          });
-          values.forEach((value, i) => {
-            const startOffset = offsets[i];
-
-            // FOR DEBUGGING
-            // console.log(`  ${value} ${startOffset}`);
-            if (start === startOffset) {
-              selector = { attribute, value };
+/** Preserve offsets while hiding Razor comments and dedicated C# code blocks. */
+function maskRazorCode(text: string): string {
+  const regions: string[] = [];
+  const markers = /@\*|@(?:code|functions)\b\s*\{/g;
+  let previousEnd = 0;
+  for (let match = markers.exec(text); match; match = markers.exec(text)) {
+    const start = match.index;
+    let end: number;
+    if (match[0] === "@*") {
+      const closing = text.indexOf("*@", markers.lastIndex);
+      end = closing < 0 ? text.length : closing + 2;
+    } else {
+      end = markers.lastIndex;
+      let depth = 1;
+      while (end < text.length && depth > 0) {
+        const character = text[end++];
+        if (character === '"' || character === "'") {
+          const verbatim = character === '"' && text[end - 2] === "@";
+          while (end < text.length) {
+            const next = text[end++];
+            if (!verbatim && next === "\\") end++;
+            else if (next === character) {
+              if (verbatim && text[end] === '"') end++;
+              else break;
             }
-          });
-        }
-        break;
+          }
+        } else if (character === "/" && text[end] === "/") {
+          const newline = text.indexOf("\n", end + 1);
+          end = newline < 0 ? text.length : newline;
+        } else if (character === "/" && text[end] === "*") {
+          const closing = text.indexOf("*/", end + 1);
+          end = closing < 0 ? text.length : closing + 2;
+        } else if (character === "{") depth++;
+        else if (character === "}") depth--;
+      }
     }
-    if (selector) {
-      break;
-    }
-    tokenType = htmlScanner.scan();
+    regions.push(
+      text.slice(previousEnd, start),
+      text.slice(start, end).replace(/[^\r\n]/g, " "),
+    );
+    previousEnd = end;
+    markers.lastIndex = end;
   }
-
-  if (selector) {
-    console.log(`${selector.value} is a "${selector.attribute || "html tag"}"`);
-  } else {
-    console.log("Invalid Selector");
-  }
-
-  return selector;
+  return regions.length ? regions.join("") + text.slice(previousEnd) : text;
 }

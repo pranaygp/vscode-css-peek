@@ -29,4 +29,9 @@ export type Stylesheet = {
   readonly text: string;
 };
 
-export type Selector = { attribute: string; value: string };
+export type Selector = {
+  attribute: string | null;
+  value: string;
+  /** CSS module member references resolve only in their imported stylesheet. */
+  moduleUri?: string;
+};

@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { TextDocument as ServerTextDocument } from "vscode-languageserver";
+import { TextDocument as ServerTextDocument } from "vscode-languageserver-textdocument";
 
 import { findDefinition } from "../../server/out/core/findDefinition";
 import { findLinkedStylesheets } from "../../server/out/utils/linkedStylesheets";
@@ -9,13 +9,13 @@ import type { StylesheetMap, Selector } from "../../server/src/types";
 
 async function loadServerDoc(file: string): Promise<ServerTextDocument> {
   const vscodeDoc = await vscode.workspace.openTextDocument(
-    vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+    vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file),
   );
   return ServerTextDocument.create(
     vscodeDoc.uri.toString(),
     vscodeDoc.languageId,
     vscodeDoc.version,
-    vscodeDoc.getText()
+    vscodeDoc.getText(),
   );
 }
 
@@ -55,11 +55,11 @@ suite("findDefinition: peekToLinkedOnly", () => {
     const refs = findLinkedStylesheets(sourceDoc);
     assert.ok(
       refs.includes(linkedUri),
-      `expected refs to include ${linkedUri}, got ${JSON.stringify(refs)}`
+      `expected refs to include ${linkedUri}, got ${JSON.stringify(refs)}`,
     );
     assert.ok(
       !refs.includes(unlinkedUri),
-      `expected refs to NOT include ${unlinkedUri}, got ${JSON.stringify(refs)}`
+      `expected refs to NOT include ${unlinkedUri}, got ${JSON.stringify(refs)}`,
     );
   });
 
@@ -95,7 +95,7 @@ suite("findLinkedStylesheets: parsing", () => {
     const doc = makeDoc(
       "file:///workspace/src/component.ts",
       "typescript",
-      `import './local.css';\nimport styles from "./other.scss";\nimport 'normalize.css';`
+      `import './local.css';\nimport styles from "./other.scss";\nimport 'normalize.css';`,
     );
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs.sort(), [
@@ -108,7 +108,7 @@ suite("findLinkedStylesheets: parsing", () => {
     const doc = makeDoc(
       "file:///workspace/src/main.scss",
       "scss",
-      `@import './partial.scss';\n@import url('./other.css');\n@import 'bare.css';`
+      `@import './partial.scss';\n@import url('./other.css');\n@import 'bare.css';`,
     );
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs.sort(), [
@@ -121,7 +121,7 @@ suite("findLinkedStylesheets: parsing", () => {
     const doc = makeDoc(
       "file:///workspace/page.html",
       "html",
-      `<link rel="icon" href="./favicon.css">\n<link rel="stylesheet" href="./real.css">`
+      `<link rel="icon" href="./favicon.css">\n<link rel="stylesheet" href="./real.css">`,
     );
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs, ["file:///workspace/real.css"]);
@@ -131,7 +131,7 @@ suite("findLinkedStylesheets: parsing", () => {
     const doc = makeDoc(
       "file:///workspace/src/component.ts",
       "typescript",
-      `import('./theme.css');\nawait import("./other.scss");\nimport './static.css';`
+      `import('./theme.css');\nawait import("./other.scss");\nimport './static.css';`,
     );
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs, ["file:///workspace/src/static.css"]);
@@ -141,7 +141,7 @@ suite("findLinkedStylesheets: parsing", () => {
     const doc = makeDoc(
       "file:///workspace/src/component.ts",
       "typescript",
-      `import './app.css?v=1';\nimport './themed.scss#dark';`
+      `import './app.css?v=1';\nimport './themed.scss#dark';`,
     );
     const refs = findLinkedStylesheets(doc);
     assert.deepStrictEqual(refs.sort(), [

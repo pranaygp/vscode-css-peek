@@ -1,17 +1,27 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2019",
-    "lib": ["ES2019"],
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
     "outDir": "out",
     "rootDir": "src",
-    "sourceMap": true
+    "sourceMap": true,
+    "moduleResolution": "Node16",
+    "skipLibCheck": true,
+    "types": ["node", "mocha"],
+    "strict": true
   },
   "include": [],
   "exclude": ["node_modules", ".vscode-test"],
   "references": [
-    { "path": "./client" },
-    { "path": "./server" },
-    { "path": "./tests" }
+    {
+      "path": "./client"
+    },
+    {
+      "path": "./server"
+    },
+    {
+      "path": "./tests"
+    }
   ]
 }

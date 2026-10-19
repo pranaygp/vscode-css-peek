@@ -66,13 +66,12 @@ export function gitignoreLineToGlob(rawLine: string): string[] {
  * patterns that approximate its semantics.
  *
  * Uses `vscode.workspace.fs` (rather than Node `fs`) so the reader itself
- * is not tied to local disk. Note: the extension as a whole does not yet
- * declare virtual-workspace support — see `capabilities.virtualWorkspaces`
- * in `package.json` and the server's direct `fs` usage. Returns an empty
- * array if the file does not exist or cannot be read.
+ * is not tied to local disk. Decode without Node globals so this also works
+ * in the browser extension host. Returns an empty array if the file does
+ * not exist or cannot be read.
  */
 export async function readGitignoreGlobs(
-  workspaceRoot: Uri
+  workspaceRoot: Uri,
 ): Promise<string[]> {
   const gitignoreUri = Uri.joinPath(workspaceRoot, ".gitignore");
 
@@ -83,7 +82,7 @@ export async function readGitignoreGlobs(
     return [];
   }
 
-  const content = Buffer.from(bytes).toString("utf-8");
+  const content = new TextDecoder("utf-8").decode(bytes);
   const globs = new Set<string>();
   for (const line of content.split(/\r?\n/)) {
     for (const glob of gitignoreLineToGlob(line)) {

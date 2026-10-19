@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "path": "fixture"
+    },
+    {
+      "path": "workspace-a"
+    },
+    {
+      "path": "workspace-b"
+    },
+    {
+      "path": "workspace-a/nested",
+      "name": "nested-workspace"
+    }
+  ],
+  "settings": {
+    "cssPeek.enableTelemetry": false,
+  },
+}

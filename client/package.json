@@ -1,1 +1,18 @@
-{"name":"vscode-css-peek-client-part","description":"VSCode part of the language server","license":"MIT","author":"Pranay Prakash <pranay.gp@gmail.com>","repository":{"type":"git","url":"https://github.com/pranaygp/vscode-css-peek.git"},"engines":{"vscode":"^1.80.0"},"scripts":{},"dependencies":{"@vscode/extension-telemetry":"^0.8.1","minimatch":"^9.0.3","vscode-languageclient":"^8.1.0"},"devDependencies":{"@types/vscode":"^1.80.0"}}
+{
+  "name": "vscode-css-peek-client",
+  "description": "VSCode part of the language server",
+  "license": "MIT",
+  "author": "Pranay Prakash <pranay.gp@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pranaygp/vscode-css-peek.git"
+  },
+  "dependencies": {
+    "@vscode/extension-telemetry": "^1.5.2",
+    "minimatch": "^10.2.6",
+    "vscode-languageclient": "^10.1.2",
+    "tslib": "^2.8.1"
+  },
+  "private": true,
+  "version": "0.0.0"
+}

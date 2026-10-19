@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,34 +14,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  desktop:
+    name: Desktop (${{ matrix.os }}, VS Code ${{ matrix.vscode }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        vscode: [stable]
+        include:
+          - os: ubuntu-latest
+            vscode: 1.91.0
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      VSCODE_VERSION: ${{ matrix.vscode }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: yarn
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Build
-        run: yarn build
-
-      - name: Lint
-        run: yarn lint
-
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - run: yarn lint
+      - run: yarn prettier
       - name: Test (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a yarn test
-
       - name: Test (macOS / Windows)
         if: runner.os != 'Linux'
         run: yarn test
+      - name: Test with IntelliSense for CSS class names in HTML
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        env:
+          CSS_PEEK_COMPATIBILITY: Zignd.html-css-class-completion
+        run: xvfb-run -a yarn test --install-extensions Zignd.html-css-class-completion
+      - name: Test with SCSS Everywhere
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        env:
+          CSS_PEEK_COMPATIBILITY: gencer.html-slim-scss-css-class-completion
+        run: xvfb-run -a yarn test --install-extensions gencer.html-slim-scss-css-class-completion
+      - name: Package bundled extension
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        run: yarn package
+      - name: Verify VSIX contents and bundle sizes
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        run: yarn verify:package
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        with:
+          name: extension-vsix
+          path: "*.vsix"
+          if-no-files-found: error
+
+  browser:
+    name: Browser (Chromium, VS Code stable)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - run: yarn playwright install --with-deps chromium
+      - run: yarn build
+      - run: yarn test:web
+
+  security:
+    name: Locked dependency security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - run: yarn audit:dependencies

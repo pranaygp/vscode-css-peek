@@ -1,12 +1,16 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2019",
-    "lib": ["ES2019"],
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
     "outDir": "out",
     "rootDir": "src",
     "sourceMap": true,
-    "composite": true
+    "composite": true,
+    "moduleResolution": "Node16",
+    "skipLibCheck": true,
+    "types": ["node", "mocha"],
+    "strict": true
   },
   "include": ["src"],
   "exclude": ["node_modules"]

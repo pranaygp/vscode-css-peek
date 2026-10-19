@@ -1,10 +1,7 @@
+import { TextDocument as ServerTextDocument } from "vscode-languageserver-textdocument";
 import * as assert from "assert";
 import * as vscode from "vscode";
-import {
-  SymbolInformation,
-  SymbolKind,
-  TextDocument as ServerTextDocument,
-} from "vscode-languageserver";
+import { SymbolInformation, SymbolKind } from "vscode-languageserver";
 
 import {
   findDefinition,
@@ -18,14 +15,14 @@ async function loadStylesheets(files: string[]): Promise<StylesheetMap> {
   const map: StylesheetMap = {};
   for (const file of files) {
     const vscodeDoc = await vscode.workspace.openTextDocument(
-      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file),
     );
     const text = vscodeDoc.getText();
     const serverDoc = ServerTextDocument.create(
       vscodeDoc.uri.toString(),
       vscodeDoc.languageId,
       vscodeDoc.version,
-      text
+      text,
     );
     map[serverDoc.uri] = { document: serverDoc };
   }
@@ -43,13 +40,13 @@ async function loadStylesheets(files: string[]): Promise<StylesheetMap> {
  */
 const utf8Decoder = new TextDecoder("utf-8");
 async function loadStylesheetsViaWorkspaceFs(
-  files: string[]
+  files: string[],
 ): Promise<StylesheetMap> {
   const map: StylesheetMap = {};
   for (const file of files) {
     const uri = vscode.Uri.joinPath(
       vscode.workspace.workspaceFolders![0].uri,
-      file
+      file,
     );
     const bytes = await vscode.workspace.fs.readFile(uri);
     const text = utf8Decoder.decode(bytes);
@@ -58,7 +55,7 @@ async function loadStylesheetsViaWorkspaceFs(
       uri.toString(),
       languageId,
       1,
-      text
+      text,
     );
     map[serverDoc.uri] = { document: serverDoc };
   }
@@ -92,7 +89,7 @@ function buildVirtualStylesheetMap(): StylesheetMap {
       entry.uri,
       entry.languageId,
       1,
-      entry.text
+      entry.text,
     );
     map[doc.uri] = { document: doc };
   }
@@ -121,29 +118,29 @@ suite("findDefinition", () => {
       .sort();
     assert.deepStrictEqual(
       files,
-      ["example.scss", "stylesheet.css", "stylesheet.css"].sort()
+      ["example.scss", "stylesheet.css", "stylesheet.css"].sort(),
     );
   });
 
   test("finds id selector definitions across files", () => {
     const selector: Selector = { attribute: "id", value: "test-2" };
     const defs = findDefinition(selector, map).sort((a, b) =>
-      a.uri.localeCompare(b.uri)
+      a.uri.localeCompare(b.uri),
     );
     assert.strictEqual(defs.length, 3);
     const files = defs.map((d) =>
-      vscode.Uri.parse(d.uri).path.split("/").pop()
+      vscode.Uri.parse(d.uri).path.split("/").pop(),
     );
     assert.deepStrictEqual(
       files.sort(),
-      ["example.less", "example.scss", "stylesheet.css"].sort()
+      ["example.less", "example.scss", "stylesheet.css"].sort(),
     );
   });
 
   test("finds tag selector definitions", () => {
     const selector: Selector = { attribute: null as any, value: "h1" };
     const defs = findDefinition(selector, map).sort(
-      (a, b) => a.range.start.line - b.range.start.line
+      (a, b) => a.range.start.line - b.range.start.line,
     );
     assert.strictEqual(defs.length, 4);
     const lines = defs.map((d) => d.range.start.line);
@@ -163,7 +160,7 @@ suite("findDefinition", () => {
 
     const classDefs = findDefinition(
       { attribute: "class", value: "test" },
-      fsMap
+      fsMap,
     );
     assert.strictEqual(classDefs.length, 3);
 
@@ -173,7 +170,7 @@ suite("findDefinition", () => {
       .sort();
     assert.deepStrictEqual(
       idFiles,
-      ["example.less", "example.scss", "stylesheet.css"].sort()
+      ["example.less", "example.scss", "stylesheet.css"].sort(),
     );
   });
 
@@ -186,7 +183,7 @@ suite("findDefinition", () => {
 
     const classDefs = findDefinition(
       { attribute: "class", value: "virtual-only" },
-      virtualMap
+      virtualMap,
     );
     assert.strictEqual(classDefs.length, 2);
     const schemes = classDefs.map((d) => vscode.Uri.parse(d.uri).scheme).sort();
@@ -194,7 +191,7 @@ suite("findDefinition", () => {
 
     const idDefs = findDefinition(
       { attribute: "id", value: "virtual-id" },
-      virtualMap
+      virtualMap,
     );
     assert.strictEqual(idDefs.length, 1);
     assert.strictEqual(vscode.Uri.parse(idDefs[0].uri).scheme, "vscode-vfs");
@@ -226,17 +223,17 @@ suite("findDefinition", () => {
     assert.strictEqual(
       findSymbols(selector, buildMap(), { peekVariables: true }).length,
       1,
-      "variable should be included when peekVariables=true"
+      "variable should be included when peekVariables=true",
     );
     assert.strictEqual(
       findSymbols(selector, buildMap()).length,
       1,
-      "variable should be included when option is omitted (default true)"
+      "variable should be included when option is omitted (default true)",
     );
     assert.strictEqual(
       findSymbols(selector, buildMap(), { peekVariables: false }).length,
       0,
-      "variable should be filtered when peekVariables=false"
+      "variable should be filtered when peekVariables=false",
     );
   });
 
@@ -246,7 +243,7 @@ suite("findDefinition", () => {
     const defs = findDefinition(selector, localMap, { peekVariables: false });
     assert.ok(
       defs.length > 0,
-      "class selectors should still resolve when peekVariables=false"
+      "class selectors should still resolve when peekVariables=false",
     );
   });
 });
@@ -256,13 +253,13 @@ suite("findDefinition with embedded <style> blocks", () => {
 
   async function loadHostDoc(file: string) {
     const vscodeDoc = await vscode.workspace.openTextDocument(
-      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file)
+      vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, file),
     );
     return ServerTextDocument.create(
       vscodeDoc.uri.toString(),
       vscodeDoc.languageId,
       vscodeDoc.version,
-      vscodeDoc.getText()
+      vscodeDoc.getText(),
     );
   }
 
@@ -272,7 +269,11 @@ suite("findDefinition with embedded <style> blocks", () => {
     assert.ok(Object.keys(embedded).length > 0, "should find a <style> block");
 
     const selector: Selector = { attribute: "class", value: "embedded-class" };
-    const defs = findDefinition(selector, {}, { embeddedStylesheetMap: embedded });
+    const defs = findDefinition(
+      selector,
+      {},
+      { embeddedStylesheetMap: embedded },
+    );
 
     assert.strictEqual(defs.length, 1);
     // The returned location should reference the host HTML file (peek
@@ -288,8 +289,8 @@ suite("findDefinition with embedded <style> blocks", () => {
       text.slice(startOffset).startsWith(".embedded-class"),
       `expected text at definition to start with ".embedded-class", got: ${text.slice(
         startOffset,
-        startOffset + 40
-      )}`
+        startOffset + 40,
+      )}`,
     );
   });
 
@@ -298,7 +299,11 @@ suite("findDefinition with embedded <style> blocks", () => {
     const embedded = extractEmbeddedStylesheets(hostDoc);
 
     const selector: Selector = { attribute: "id", value: "embedded-id" };
-    const defs = findDefinition(selector, {}, { embeddedStylesheetMap: embedded });
+    const defs = findDefinition(
+      selector,
+      {},
+      { embeddedStylesheetMap: embedded },
+    );
 
     assert.strictEqual(defs.length, 1);
     assert.strictEqual(defs[0].uri, hostDoc.uri);
