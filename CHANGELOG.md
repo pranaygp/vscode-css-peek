@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.5.1 - 2026-10-22
+
+- Replace retired Marketplace badges with a linked install badge, the current Open VSX version, and CI status.
+
 ## 4.5.0 - 2026-10-19
 
 - Prevent duplicate language-server processes during concurrent document opens, workspace changes, failed startup, and shutdown.

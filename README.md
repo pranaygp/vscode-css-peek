@@ -1,6 +1,6 @@
-![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/pranaygp.vscode-css-peek?logo=visualstudiocode)
-![Visual Studio Marketplace Version (including pre-releases)](https://img.shields.io/visual-studio-marketplace/v/pranaygp.vscode-css-peek?logo=visualstudiocode)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-vscode--css--peek-purple)](https://open-vsx.org/extension/pranaygp/vscode-css-peek)
+[![Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-007ACC)](https://marketplace.visualstudio.com/items?itemName=pranaygp.vscode-css-peek)
+[![Open VSX version](https://img.shields.io/open-vsx/v/pranaygp/vscode-css-peek?label=Open%20VSX)](https://open-vsx.org/extension/pranaygp/vscode-css-peek)
+[![CI](https://img.shields.io/github/actions/workflow/status/pranaygp/vscode-css-peek/ci.yml?branch=master&label=CI)](https://github.com/pranaygp/vscode-css-peek/actions/workflows/ci.yml)
 
 # 🔍 CSS Peek
 
@@ -71,7 +71,7 @@ yarn test                # on Linux: xvfb-run -a yarn test
 yarn test:web            # install Chromium first: npx playwright install chromium
 yarn audit:dependencies
 yarn package
-yarn verify:package vscode-css-peek-4.5.0.vsix
+yarn verify:package
 ```
 
 CI runs the desktop integration suite on Linux, macOS, and Windows with current stable VS Code, tests the minimum supported editor, exercises the browser worker, audits the lockfile, and checks the packaged VSIX. The package contains bundled runtimes and can be installed without development dependencies.
